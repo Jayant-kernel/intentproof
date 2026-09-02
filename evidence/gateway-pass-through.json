@@ -1,0 +1,40 @@
+{
+  "observed_at": "2026-09-02T20:58:14.007Z",
+  "status": "complete",
+  "mode": "Razorpay Test Mode",
+  "upstream_image": "razorpay/mcp@sha256:435109006d6247103899938cf7b1747ba8be1c1a8a28d452cf9fa8eff506e5c6",
+  "policy_clock": {
+    "kind": "injected",
+    "instant": "2026-09-03T04:30:00.000Z",
+    "timezone": "Asia/Kolkata"
+  },
+  "allowed_order": {
+    "tool": "create_order",
+    "amount_paise": 100,
+    "currency": "INR",
+    "policy_verdict": "ALLOW",
+    "upstream_tool_calls": 1,
+    "succeeded": true,
+    "response_saved": false
+  },
+  "denied_calls": [
+    {
+      "expected_verdict": "BLOCK",
+      "observed_verdict": "BLOCK",
+      "upstream_tool_calls": 0
+    },
+    {
+      "expected_verdict": "HOLD_FOR_APPROVAL",
+      "observed_verdict": "HOLD_FOR_APPROVAL",
+      "upstream_tool_calls": 0
+    },
+    {
+      "expected_verdict": "ABSTAIN",
+      "observed_verdict": "ABSTAIN",
+      "upstream_tool_calls": 0
+    }
+  ],
+  "total_upstream_tool_calls": 1,
+  "credentials_saved": false,
+  "payment_data_saved": false
+}

@@ -1,0 +1,46 @@
+mandate_id: mnd_demo_001
+version: 1
+source_text: |
+  Create orders up to 3,000 rupees.
+  Keep total action value under 25,000 rupees per day, with no more than 200 actions.
+  Do not capture a payment until delivery is confirmed.
+  Ask me before capturing more than 2,000 rupees.
+  Do not act between 10pm and 8am.
+approved_by: demo-merchant
+approved_at: null
+revoked: false
+
+constraints:
+  - id: C1
+    rule: tool_allowlist
+    tools: [create_order, create_payment_link, capture_payment]
+    quote: "Create orders up to 3,000 rupees."
+  - id: C2
+    rule: amount_ceiling
+    tool: create_order
+    max_paise: 300000
+    quote: "Create orders up to 3,000 rupees."
+  - id: C3
+    rule: precondition
+    tool: capture_payment
+    assert: delivery_confirmed
+    on_unknown: ABSTAIN
+    quote: "Do not capture a payment until delivery is confirmed."
+  - id: C4
+    rule: approval_gate
+    tool: capture_payment
+    above_paise: 200000
+    timeout_seconds: 900
+    quote: "Ask me before capturing more than 2,000 rupees."
+  - id: C5
+    rule: time_window
+    allowed: "08:00-22:00"
+    timezone: Asia/Kolkata
+    quote: "Do not act between 10pm and 8am."
+
+budgets:
+  - window: 24h
+    tool: "*"
+    max_total_paise: 2500000
+    max_calls: 200
+    quote: "Keep total action value under 25,000 rupees per day, with no more than 200 actions."

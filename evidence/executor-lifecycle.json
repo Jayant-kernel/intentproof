@@ -1,0 +1,49 @@
+{
+  "observed_at": "2026-09-02T21:14:22.143Z",
+  "status": "verified",
+  "upstream": "fake",
+  "scenarios": {
+    "confirmed_success": {
+      "reserved": 1,
+      "committed": 1
+    },
+    "definitive_failure": {
+      "released": 1,
+      "remaining_budget_paise": 0
+    },
+    "timeout": {
+      "in_doubt": 1,
+      "capacity_reused": false,
+      "retry_upstream_calls": 0
+    },
+    "retry": {
+      "attempts": 2,
+      "upstream_calls": 1
+    },
+    "concurrent_value_budget": {
+      "attempts": 10,
+      "amount_each_paise": 40000,
+      "budget_paise": 250000,
+      "committed": 6,
+      "blocked": 4,
+      "committed_value_paise": 240000
+    },
+    "rolling_call_budget": {
+      "attempts": 3,
+      "max_calls": 2,
+      "committed": 2,
+      "blocked": 1
+    },
+    "kill_switch_recheck": {
+      "upstream_calls": 0,
+      "reservation_state": "RELEASED"
+    },
+    "mandate_version_recheck": {
+      "upstream_calls": 0,
+      "reservation_state": "RELEASED"
+    }
+  },
+  "credentials_saved": false,
+  "payment_data_saved": false,
+  "real_razorpay_mutations": 0
+}

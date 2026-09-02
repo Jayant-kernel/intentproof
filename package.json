@@ -1,0 +1,42 @@
+{
+  "name": "intentproof",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A merchant-controlled policy gateway for AI payment agents.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "gateway": "tsx src/gateway/stdio.ts",
+    "probe:upstream": "tsx src/cli/probe-upstream.ts",
+    "probe:gateway": "tsx src/cli/probe-gateway.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "export:ledger": "tsx src/cli/export-ledger.ts",
+    "verify:ledger": "tsx src/cli/verify-ledger.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "better-sqlite3": "13.0.3",
+    "dotenv": "17.4.2",
+    "express": "5.2.1",
+    "pino": "10.3.1",
+    "yaml": "2.9.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/express": "5.0.6",
+    "@types/node": "26.4.1",
+    "@types/supertest": "7.2.1",
+    "supertest": "7.2.2",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}
