@@ -18,6 +18,7 @@ const rejectedResult: CallToolResult = {
 
 class FakeDispatcher implements MutationDispatcher {
   calls = 0;
+  readonly argumentsSeen: Record<string, unknown>[] = [];
 
   constructor(
     private readonly behavior: () =>
@@ -28,8 +29,9 @@ class FakeDispatcher implements MutationDispatcher {
     })
   ) {}
 
-  async dispatch(): Promise<MutationDispatchOutcome> {
+  async dispatch(_tool: string, arguments_: Record<string, unknown>): Promise<MutationDispatchOutcome> {
     this.calls += 1;
+    this.argumentsSeen.push(structuredClone(arguments_));
     return this.behavior();
   }
 }
@@ -145,6 +147,33 @@ describe("transactional budget executor", () => {
     expect(first).toMatchObject({ status: "COMMITTED", replayed: false });
     expect(retry).toMatchObject({ status: "COMMITTED", replayed: true });
     expect(dispatcher.calls).toBe(1);
+  });
+
+  it("persists correlation before dispatch and preserves caller values", async () => {
+    const generatedDispatcher = new FakeDispatcher();
+    const generated = setup({ dispatcher: generatedDispatcher });
+    await generated.executor.execute({
+      tool: "create_order",
+      arguments: { amount: 19_900, currency: "INR" },
+      amountPaise: 19_900,
+      idempotencyKey: "correlation-generated"
+    });
+    const generatedRecord = generated.store.getDispatch("correlation-generated")!;
+    expect(generatedRecord.correlationValue).toMatch(/^ip_[a-f0-9]{32}$/u);
+    expect(generatedDispatcher.argumentsSeen[0]?.receipt).toBe(generatedRecord.correlationValue);
+
+    const callerDispatcher = new FakeDispatcher();
+    const caller = setup({ dispatcher: callerDispatcher });
+    await caller.executor.execute({
+      tool: "create_order",
+      arguments: { amount: 19_900, currency: "INR", receipt: "merchant-receipt" },
+      amountPaise: 19_900,
+      idempotencyKey: "correlation-caller"
+    });
+    expect(caller.store.getDispatch("correlation-caller")?.correlationValue).toBe(
+      "merchant-receipt"
+    );
+    expect(callerDispatcher.argumentsSeen[0]?.receipt).toBe("merchant-receipt");
   });
 
   it("does not overspend when ten individually valid calls arrive together", async () => {

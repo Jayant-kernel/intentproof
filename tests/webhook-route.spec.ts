@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 
 import { createApp } from "../src/app.js";
+import { prepareMutation } from "../src/executor/budgeted-executor.js";
 import { signWebhook } from "../src/intake/signature.js";
 import { AuditStore } from "../src/ledger/audit-store.js";
 
@@ -69,5 +70,54 @@ describe("webhook intake", () => {
 
     expect(authorized.body.status).toBe("out_of_order");
     expect(store.countByType("OUT_OF_ORDER_IGNORED")).toBe(1);
+  });
+
+  it("settles an uncertain capture once when webhook and reconciler race", async () => {
+    const paymentId = "pay_WEBHOOKRACE1";
+    const arguments_ = { payment_id: paymentId, amount: 20_000, currency: "INR" };
+    const prepared = prepareMutation("capture_payment", arguments_, 20_000, "webhook-race");
+    store.initializeRuntimeControls(1);
+    store.reserveDispatch({
+      idempotencyKey: "webhook-race",
+      tool: "capture_payment",
+      amountPaise: 20_000,
+      mandateId: "mnd_test",
+      mandateVersion: 1,
+      agentId: "agent_test",
+      now: "2026-09-03T05:00:00.000Z",
+      windowStart: "2026-09-02T05:00:00.000Z",
+      maxTotalPaise: 100_000,
+      maxCalls: 10,
+      requestFingerprint: prepared.requestFingerprint,
+      correlationType: prepared.correlationType,
+      correlationValue: prepared.correlationValue
+    });
+    store.claimDispatch("webhook-race", 1, "2026-09-03T05:00:00.000Z");
+    store.settleDispatch(
+      "webhook-race",
+      "IN_DOUBT",
+      "timeout",
+      "2026-09-03T05:00:00.000Z"
+    );
+    store.acquireReconcileLease({
+      idempotencyKey: "webhook-race",
+      owner: "racing-worker",
+      now: "2026-09-03T05:00:01.000Z",
+      leaseUntil: "2026-09-03T05:00:31.000Z"
+    });
+
+    const webhook = await send("evt_webhook_race", payload("payment.captured", paymentId));
+    const racedSettlement = store.settleReconciledDispatch({
+      idempotencyKey: "webhook-race",
+      owner: "racing-worker",
+      state: "COMMITTED",
+      upstreamStatus: "capture_captured_confirmed",
+      now: "2026-09-03T05:00:02.000Z"
+    });
+
+    expect(webhook.body.status).toBe("applied");
+    expect(racedSettlement.state).toBe("COMMITTED");
+    expect(store.countByType("BUDGET_COMMITTED")).toBe(1);
+    expect(store.countByType("RECONCILIATION_SETTLED")).toBe(1);
   });
 });

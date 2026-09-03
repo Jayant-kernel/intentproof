@@ -19,6 +19,24 @@ On 2026-09-03, the credentialed probe started the Docker server, listed 41 tools
 read-only `fetch_all_payments` call. The saved evidence contains the tool names and success status,
 but no response body, credentials, or payment data.
 
+The pinned image was inspected again for reconciliation with synthetic placeholders and without
+making a Razorpay API call. Its advertised input schemas include `fetch_all_orders.receipt`,
+`fetch_all_payment_links.reference_id`, and `fetch_payment.payment_id`. Those three names form the
+complete reconciliation read allowlist.
+
+The following assumptions remain **NOT VERIFIED** because the image advertises no output schemas and
+no real reconciliation read was made:
+
+- the exact JSON wrapper and required fields returned by successful read and mutation tools;
+- whether the advertised receipt and reference-ID filters behave as exact server-side filters;
+- Razorpay read-after-write visibility after an uncertain mutation;
+- whether a filtered order collection can still be pagination-ambiguous;
+- the payment-link collection wrapper and its count or pagination behavior;
+- whether a just-captured payment can temporarily read as `authorized`.
+
+IntentProof handles each unknown by retaining `IN_DOUBT`. It does not treat an empty collection,
+404, parse failure, or free-form status text as proof that a mutation failed.
+
 The next probe sent one ₹1 order through the IntentProof MCP gateway. It was allowed and executed
 once. BLOCK, HOLD_FOR_APPROVAL, and ABSTAIN were then evaluated in the same process, and each added
 zero calls at the upstream boundary. The order response was discarded. After this first successful

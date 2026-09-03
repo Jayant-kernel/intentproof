@@ -1,0 +1,19 @@
+{
+  "observed_at": "2026-09-03",
+  "milestone": "crash-safe reconciliation",
+  "verification_mode": "deterministic fake read clients",
+  "real_test_mode_mutation_made": false,
+  "invariants": {
+    "mutation_attempts_per_idempotency_key_max": 1,
+    "reconciliation_mutation_calls": 0,
+    "empty_or_ambiguous_reads_release_budget": false,
+    "expired_uncertainty_auto_released": false,
+    "terminal_transition_audit_duplicates": 0
+  },
+  "saved_data": {
+    "credentials": false,
+    "response_bodies": false,
+    "customer_data": false,
+    "full_external_identifiers": false
+  }
+}

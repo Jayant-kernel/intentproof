@@ -33,7 +33,7 @@ class FakeUpstream implements UpstreamClient {
   constructor(
     private readonly result: CallToolResult = {
       content: [{ type: "text", text: "upstream-ok" }],
-      structuredContent: { id: "order_test_001" }
+      structuredContent: { id: "order_TEST001" }
     }
   ) {}
 
@@ -251,7 +251,14 @@ describe("narrow IntentProof MCP gateway", () => {
         idempotency_key: "gateway-retry-001"
       });
       expect(upstream.calls).toEqual([
-        { name: "create_order", arguments: { amount: 19_900, currency: "INR" } }
+        {
+          name: "create_order",
+          arguments: {
+            amount: 19_900,
+            currency: "INR",
+            receipt: expect.stringMatching(/^ip_[a-f0-9]{32}$/u)
+          }
+        }
       ]);
     } finally {
       await connection.close();

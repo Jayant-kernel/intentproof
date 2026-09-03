@@ -8,6 +8,9 @@ import { BudgetedExecutor } from "../executor/budgeted-executor.js";
 import { McpMutationDispatcher } from "../executor/mcp-dispatcher.js";
 import { AuditStore } from "../ledger/audit-store.js";
 import { loadMandate } from "../mandate/load.js";
+import { McpReconciliationReadClient } from "../reconciliation/mcp-read-client.js";
+import { DispatchReconciler } from "../reconciliation/reconciler.js";
+import { inspectReconciliationCapabilities } from "../reconciliation/types.js";
 import { testModeCredentialsFromEnvironment } from "../upstream/credentials.js";
 import { RazorpayMcpClient } from "../upstream/razorpay-mcp.js";
 import { IntentProofGateway } from "./gateway.js";
@@ -21,9 +24,16 @@ if (!credentials) {
 const mandate = loadMandate(resolve("mandates/default.yaml"));
 const auditStore = new AuditStore(process.env.DB_PATH ?? "./intentproof.db");
 auditStore.initializeRuntimeControls(mandate.version);
+const recoveryStaleMs = 30_000;
+const startupTime = new Date();
+auditStore.recoverDispatches(
+  new Date(startupTime.getTime() - recoveryStaleMs).toISOString(),
+  startupTime.toISOString()
+);
 const upstream = await RazorpayMcpClient.connect(credentials);
 
-const upstreamToolNames = new Set((await upstream.listTools()).map((tool) => tool.name));
+const upstreamTools = await upstream.listTools();
+const upstreamToolNames = new Set(upstreamTools.map((tool) => tool.name));
 for (const required of ["create_order", "create_payment_link", "capture_payment"]) {
   if (!upstreamToolNames.has(required)) {
     await upstream.close();
@@ -38,6 +48,11 @@ if (!budget) {
   auditStore.close();
   throw new Error("The active mandate must define a rolling budget");
 }
+const reconciler = new DispatchReconciler({
+  store: auditStore,
+  readClient: new McpReconciliationReadClient(upstream),
+  capabilities: inspectReconciliationCapabilities(upstreamTools)
+});
 const executor = new BudgetedExecutor({
   store: auditStore,
   dispatcher: new McpMutationDispatcher(upstream),
@@ -45,7 +60,8 @@ const executor = new BudgetedExecutor({
   mandateVersion: mandate.version,
   agentId: "mcp-agent",
   maxTotalPaise: budget.max_total_paise,
-  maxCalls: budget.max_calls
+  maxCalls: budget.max_calls,
+  reconciler
 });
 
 const gateway = new IntentProofGateway({
@@ -70,8 +86,34 @@ const gateway = new IntentProofGateway({
 });
 const server = createGatewayMcpServer(gateway);
 const transport = new StdioServerTransport();
+let maintenancePromise: Promise<void> | null = null;
+function runReconciliationMaintenance(): Promise<void> {
+  if (maintenancePromise) return maintenancePromise;
+  const work = (async () => {
+    try {
+      const now = new Date();
+      auditStore.recoverDispatches(
+        new Date(now.getTime() - recoveryStaleMs).toISOString(),
+        now.toISOString()
+      );
+      await reconciler.reconcileDue();
+    } catch {
+      auditStore.append("RECONCILIATION_WORKER_ERROR", { outcome: "retry_later" });
+    }
+  })();
+  maintenancePromise = work.finally(() => {
+    maintenancePromise = null;
+  });
+  return maintenancePromise;
+}
+const reconciliationTimer = setInterval(() => {
+  void runReconciliationMaintenance();
+}, 30_000);
+reconciliationTimer.unref();
 
 async function shutdown(): Promise<void> {
+  clearInterval(reconciliationTimer);
+  await maintenancePromise?.catch(() => undefined);
   await server.close().catch(() => undefined);
   await upstream.close().catch(() => undefined);
   auditStore.close();

@@ -3,7 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/client";
 import type { DispatchState } from "../budget/types.js";
 
 export type MutationDispatchOutcome =
-  | { kind: "CONFIRMED_SUCCESS"; result: CallToolResult }
+  | { kind: "CONFIRMED_SUCCESS"; result: CallToolResult; upstreamEntityId?: string }
   | { kind: "DEFINITIVE_FAILURE"; result: CallToolResult }
   | { kind: "INDETERMINATE"; result?: CallToolResult };
 
@@ -35,4 +35,8 @@ export type ExecuteMutationResult =
 
 export interface ToolExecutor {
   execute(input: ExecuteMutationInput): Promise<ExecuteMutationResult>;
+}
+
+export interface UncertainDispatchReconciler {
+  reconcile(idempotencyKey: string): Promise<{ status: DispatchState }>;
 }

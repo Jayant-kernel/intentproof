@@ -26,7 +26,7 @@ The project uses Razorpay Test Mode only. Never use live credentials or real cus
 - [x] One INR 1 Test Mode order passed through the gateway; each non-`ALLOW` verdict made zero upstream calls.
 - [x] Transactional `RESERVED`, `COMMITTED`, `RELEASED`, and `IN_DOUBT` executor lifecycle.
 - [x] SQLite-backed idempotency and dispatch-time kill-switch/version checks.
-- [ ] Bounded read-back and reconciliation for `IN_DOUBT` reservations.
+- [x] Crash recovery and bounded read-only reconciliation for `IN_DOUBT` reservations.
 - [ ] Offline LLM mandate compiler with human approval.
 
 ## Setup
@@ -70,7 +70,18 @@ counter. It refuses to run again once `evidence/gateway-pass-through.json` exist
 
 Callers may provide `idempotency_key`. If they do not, IntentProof hashes the mandate, agent, tool,
 canonical arguments, and a five-minute logical window. Reusing a key returns the stored lifecycle
-state and never dispatches again.
+state and never dispatches again. Each reservation also stores a request fingerprint and a durable
+correlation value: an order receipt, a payment-link reference ID, or the existing payment ID. A key
+cannot be reused with different mutation arguments, and correlation values are locally unique.
+
+If a process stops before a reservation is claimed for dispatch, recovery releases the stale row as
+`never_sent_recovery`. A claimed stale reservation is treated as `IN_DOUBT`, because the call may
+have reached Razorpay. Startup performs recovery, and the maintenance loop repeats it after a short
+staleness window. The reconciler leases uncertain rows and uses only `fetch_all_orders`,
+`fetch_all_payment_links`, or `fetch_payment`. It reads after injected 250 ms, 500 ms, and 1,000 ms
+delays, then keeps the reservation charged, records an escalation, and schedules a later retry when
+the result is still uncertain. Missing entities never release budget. A confirmed `failed` payment
+is the only read result that releases an uncertain capture.
 
 Start the webhook intake after setting `WEBHOOK_SECRET`:
 
@@ -101,7 +112,11 @@ tool fails closed. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the enforcement 
 
 ## Where IntentProof Still Leaks
 
-- `IN_DOUBT` reservations stay charged to the rolling budget, but there is no read-back reconciler yet.
+- The pinned MCP image exposes the required receipt, reference-ID, and payment-ID read filters, but
+  it publishes no output schema. IntentProof therefore accepts only the explicit response shapes it
+  validates and leaves every other shape `IN_DOUBT`.
+- Razorpay read-after-write timing and payment-link pagination behavior are not verified. Empty,
+  delayed, contradictory, or ambiguous reads stay charged and require later retry or human review.
 - Idempotency is enforced by this SQLite store. It is not a global exactly-once guarantee.
 - The final kill-switch and mandate-version check runs in the transaction that claims a reservation.
   The network call starts immediately after that transaction, so a host failure in that narrow gap

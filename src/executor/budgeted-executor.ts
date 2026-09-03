@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 
 import { canonicalJson } from "../ledger/canonical.js";
+import type { CorrelationType, DispatchRecord } from "../budget/types.js";
 import type { AuditStore } from "../ledger/audit-store.js";
 import type {
   ExecuteMutationInput,
   ExecuteMutationResult,
   MutationDispatcher,
-  ToolExecutor
+  ToolExecutor,
+  UncertainDispatchReconciler
 } from "./types.js";
 
 const IDEMPOTENCY_WINDOW_MS = 5 * 60 * 1_000;
@@ -22,6 +24,86 @@ export interface BudgetedExecutorOptions {
   maxCalls: number;
   clock?: () => Date;
   beforeDispatch?: () => void | Promise<void>;
+  reconciler?: UncertainDispatchReconciler;
+}
+
+interface PreparedMutation {
+  arguments: Record<string, unknown>;
+  correlationType: CorrelationType;
+  correlationValue: string;
+  requestFingerprint: string;
+}
+
+function generatedCorrelation(idempotencyKey: string): string {
+  return `ip_${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 32)}`;
+}
+
+export function prepareMutation(
+  tool: string,
+  arguments_: Record<string, unknown>,
+  amountPaise: number,
+  idempotencyKey: string
+): PreparedMutation {
+  let correlationType: CorrelationType;
+  let correlationValue: string;
+  if (tool === "create_order") {
+    correlationType = "receipt";
+    if (Object.hasOwn(arguments_, "receipt") && typeof arguments_.receipt !== "string") {
+      throw new Error("caller-provided receipt must be a string");
+    }
+    correlationValue =
+      typeof arguments_.receipt === "string"
+        ? arguments_.receipt
+        : generatedCorrelation(idempotencyKey);
+  } else if (tool === "create_payment_link") {
+    correlationType = "reference_id";
+    if (Object.hasOwn(arguments_, "reference_id") && typeof arguments_.reference_id !== "string") {
+      throw new Error("caller-provided reference_id must be a string");
+    }
+    correlationValue =
+      typeof arguments_.reference_id === "string"
+        ? arguments_.reference_id
+        : generatedCorrelation(idempotencyKey);
+  } else if (tool === "capture_payment") {
+    correlationType = "payment_id";
+    if (typeof arguments_.payment_id !== "string") {
+      throw new Error("capture_payment requires a payment_id correlation");
+    }
+    correlationValue = arguments_.payment_id;
+  } else {
+    throw new Error(`Unsupported mutation tool: ${tool}`);
+  }
+
+  if (correlationValue.length < 1 || correlationValue.length > 40) {
+    throw new Error(`${correlationType} must be between 1 and 40 characters`);
+  }
+  const preparedArguments = { ...arguments_, [correlationType]: correlationValue };
+  const requestFingerprint = `sha256:${createHash("sha256")
+    .update(
+      canonicalJson({
+        tool,
+        amount_paise: amountPaise,
+        currency: preparedArguments.currency ?? null,
+        arguments: preparedArguments
+      })
+    )
+    .digest("hex")}`;
+  return {
+    arguments: preparedArguments,
+    correlationType,
+    correlationValue,
+    requestFingerprint
+  };
+}
+
+function persistedArguments(
+  dispatch: DispatchRecord,
+  original: Record<string, unknown>
+): Record<string, unknown> {
+  if (dispatch.correlationType === null || dispatch.correlationValue === null) {
+    throw new Error("Reserved dispatch is missing durable correlation");
+  }
+  return { ...original, [dispatch.correlationType]: dispatch.correlationValue };
 }
 
 export function deriveIdempotencyKey(input: {
@@ -64,6 +146,7 @@ export class BudgetedExecutor implements ToolExecutor {
         arguments: input.arguments,
         now
       });
+    const prepared = prepareMutation(input.tool, input.arguments, input.amountPaise, idempotencyKey);
     const reservation = this.options.store.reserveDispatch({
       idempotencyKey,
       tool: input.tool,
@@ -74,7 +157,10 @@ export class BudgetedExecutor implements ToolExecutor {
       now: now.toISOString(),
       windowStart: new Date(now.getTime() - BUDGET_WINDOW_MS).toISOString(),
       maxTotalPaise: this.options.maxTotalPaise,
-      maxCalls: this.options.maxCalls
+      maxCalls: this.options.maxCalls,
+      requestFingerprint: prepared.requestFingerprint,
+      correlationType: prepared.correlationType,
+      correlationValue: prepared.correlationValue
     });
 
     if (reservation.status === "budget_exceeded") {
@@ -90,10 +176,32 @@ export class BudgetedExecutor implements ToolExecutor {
       };
     }
     if (reservation.status === "existing") {
+      const status =
+        reservation.dispatch.state === "IN_DOUBT" && this.options.reconciler
+          ? (await this.options.reconciler.reconcile(idempotencyKey)).status
+          : reservation.dispatch.state;
       return {
-        status: reservation.dispatch.state,
+        status,
         idempotencyKey,
         replayed: true
+      };
+    }
+    if (reservation.status === "idempotency_conflict") {
+      return {
+        status: "BLOCKED",
+        idempotencyKey,
+        replayed: true,
+        ruleId: "SYSTEM_IDEMPOTENCY_CONFLICT",
+        message: "idempotency key was already used for a different mutation request"
+      };
+    }
+    if (reservation.status === "correlation_conflict") {
+      return {
+        status: "BLOCKED",
+        idempotencyKey,
+        replayed: false,
+        ruleId: "SYSTEM_CORRELATION_CONFLICT",
+        message: "mutation correlation is already assigned to another request"
       };
     }
 
@@ -128,31 +236,33 @@ export class BudgetedExecutor implements ToolExecutor {
     }
 
     try {
-      const outcome = await this.options.dispatcher.dispatch(input.tool, input.arguments);
+      const dispatchArguments = persistedArguments(claim.dispatch, prepared.arguments);
+      const outcome = await this.options.dispatcher.dispatch(input.tool, dispatchArguments);
       const settledAt = this.clock().toISOString();
       if (outcome.kind === "CONFIRMED_SUCCESS") {
-        this.options.store.settleDispatch(
+        const settled = this.options.store.settleDispatch(
           idempotencyKey,
           "COMMITTED",
           "confirmed_success",
-          settledAt
+          settledAt,
+          outcome.upstreamEntityId
         );
         return {
-          status: "COMMITTED",
+          status: settled.state,
           idempotencyKey,
           replayed: false,
           result: outcome.result
         };
       }
       if (outcome.kind === "DEFINITIVE_FAILURE") {
-        this.options.store.settleDispatch(
+        const settled = this.options.store.settleDispatch(
           idempotencyKey,
           "RELEASED",
           "definitive_failure",
           settledAt
         );
         return {
-          status: "RELEASED",
+          status: settled.state,
           idempotencyKey,
           replayed: false,
           result: outcome.result
@@ -165,8 +275,11 @@ export class BudgetedExecutor implements ToolExecutor {
         "indeterminate_result",
         settledAt
       );
+      const reconciled = this.options.reconciler
+        ? await this.options.reconciler.reconcile(idempotencyKey)
+        : { status: "IN_DOUBT" as const };
       return {
-        status: "IN_DOUBT",
+        status: reconciled.status,
         idempotencyKey,
         replayed: false,
         ...(outcome.result ? { result: outcome.result } : {})
@@ -178,7 +291,10 @@ export class BudgetedExecutor implements ToolExecutor {
         "transport_exception",
         this.clock().toISOString()
       );
-      return { status: "IN_DOUBT", idempotencyKey, replayed: false };
+      const reconciled = this.options.reconciler
+        ? await this.options.reconciler.reconcile(idempotencyKey)
+        : { status: "IN_DOUBT" as const };
+      return { status: reconciled.status, idempotencyKey, replayed: false };
     }
   }
 }

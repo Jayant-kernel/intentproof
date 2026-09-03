@@ -37,4 +37,28 @@ key, the fallback is a hash of the mandate, agent, tool, canonical arguments, an
 bucket. This is useful for immediate retries, but callers that can identify a business operation
 should always supply their own stable key.
 
+Before reservation, the executor derives a request fingerprint and durable correlation. Generated
+order receipts and payment-link reference IDs are deterministic `ip_` values derived from the
+idempotency key; caller values are preserved. Capture uses the existing payment ID. The fingerprint
+and correlation are inserted with the reservation, and the persisted correlation is used for the
+mutation call.
+
+## Recovery and reconciliation
+
+At gateway startup and during maintenance, a stale unclaimed `RESERVED` row can be released because
+no durable dispatch claim exists. A stale claimed row moves to `IN_DOUBT`. A short staleness window
+keeps recovery away from work active in the current process. Recovery writes the state transition
+and audit rows in the same immediate SQLite transaction and is safe to repeat.
+
+The reconciler claims due rows with a compare-and-swap lease. It has a separate read-only client
+whose allowlist contains `fetch_all_orders`, `fetch_all_payment_links`, and `fetch_payment`; it has no
+mutation method. Unique matching order or payment-link data can commit a reservation. A fetched
+capture in `captured` or `refunded` commits it, while `failed` releases it. Every empty, malformed,
+non-terminal, conflicting, or ambiguous read remains `IN_DOUBT`. After the bounded immediate reads,
+the next retry time and human-escalation marker are stored without freeing capacity.
+
+Terminal settlement is another compare-and-swap transaction. An authenticated `payment.captured`
+webhook can settle the matching uncertain capture by payment ID. If it races with the reconciler,
+only the first terminal transition writes the budget and reconciliation audit records.
+
 The current safety limits and deliberately narrow claims are documented in [SAFETY.md](./SAFETY.md).
