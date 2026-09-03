@@ -38,6 +38,18 @@
   policy text only, and Gemini compilation must never receive real customer or payment data.
 - The demo agent has only the three gateway tools and no direct upstream client. Its default run uses
   a deterministic fake upstream and synthetic identifiers.
+- The model planner can emit only a strict four-field proposal for three mutations or `no_action`.
+  It cannot emit a verdict, approval, mandate change, provider request, or arbitrary tool name.
+- Planner providers receive no gateway, MCP, dispatcher, upstream client, policy state, approval
+  state, or Razorpay credential. The live Gemini smoke command is planning-only and has no execution
+  dependency.
+- Sensitive or payment-event-shaped objectives are rejected before a provider call. Model output is
+  byte-limited, parsed as untrusted JSON, checked for sensitive explanation text, and validated twice
+  before the gateway sees it: once as a planner proposal and once as gateway arguments.
+- Prompt instructions cannot expand the hard-coded proposal union. Invalid output makes no gateway
+  call; `BLOCK`, `HOLD_FOR_APPROVAL`, and `ABSTAIN` make no upstream call.
+- Redaction patterns and prompt delimiting are defense in depth, not a proof that arbitrary prose is
+  free of sensitive data. Operators must use synthetic objectives for live-model smoke testing.
 - CLI approval records an asserted local identity; it is not authentication, a signature, or
   protection against a compromised host.
 - No failure story is published unless it was observed during development.

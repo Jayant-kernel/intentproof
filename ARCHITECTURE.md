@@ -87,6 +87,38 @@ revocation state, and draft provenance. Loading recomputes it. The demo agent de
 same `IntentProofGateway.callTool` boundary used by other callers; a deterministic fake upstream is
 behind that gateway, never inside the agent.
 
+## Constrained Model Planner
+
+The model-backed planner is a proposal layer, not an authorization layer:
+
+```text
+user objective
+  -> sensitive-input rejection and bounded prompt
+  -> Gemini or deterministic fake planner
+  -> output byte limit and strict proposal schema
+  -> deterministic gateway-argument validation
+  -> IntentProof gateway
+  -> policy verdict
+  -> fake or configured upstream, only after ALLOW
+```
+
+The strict proposal union contains exactly `tool`, `arguments`, `intent_id`, and `explanation`.
+Only `create_order`, `create_payment_link`, `capture_payment`, and `no_action` exist in that union.
+Each mutation has a deliberately small argument object; unknown fields and unsupported currencies
+are rejected. The locally derived `planner:<intent_id>` key is added after model validation and the
+result is parsed again with the existing gateway tool schema.
+
+The planner provider receives only a bounded, delimited objective. It has no gateway, MCP,
+dispatcher, upstream client, audit store, credentials, policy context, or approval state. The agent
+that joins planning to execution receives a single `callTool` capability. Model output is excluded
+from operational evidence until it passes validation, and returned planner summaries omit mutation
+arguments. The planning-only Gemini CLI is a separate entry point with no gateway imports.
+
+Model failures are classified as malformed response, schema failure, timeout, provider failure,
+oversized output, sensitive input, or sensitive output. All stop before execution. A schema-valid
+proposal is still only a request: kill-switch, current mandate version, budgets, delivery evidence,
+and approval gates are evaluated by the existing deterministic gateway.
+
 ## Counterfactual Lab
 
 The Lab is isolated under `src/lab`; the production gateway does not depend on it. A strict,

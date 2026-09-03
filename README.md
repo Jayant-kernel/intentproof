@@ -29,6 +29,7 @@ The project uses Razorpay Test Mode only. Never use live credentials or real cus
 - [x] Crash recovery and bounded read-only reconciliation for `IN_DOUBT` reservations.
 - [x] Counterfactual Lab replay foundation with bounded schedule exploration and trace minimization.
 - [x] Offline mandate compiler with strict review, explicit approval, immutable versions, and a safe demo agent.
+- [x] Constrained model-backed planner with strict proposals and gateway-only execution.
 
 ## Setup
 
@@ -73,6 +74,30 @@ The transcript shows the agent request, matching mandate quote, deterministic ve
 count, and audit evidence for allowed, blocked, held, abstained, kill-switch, and stale-version
 cases. The demo agent receives only the IntentProof gateway interface and has no upstream client or
 credentials.
+
+Run the separate model-planner demonstration:
+
+```powershell
+npm run planner:demo
+```
+
+The planner may propose only `create_order`, `create_payment_link`, `capture_payment`, or
+`no_action`. Strict validation rejects malformed JSON, unknown tools or fields, incomplete
+arguments, non-INR currency, invalid paise values, oversized output, sensitive input, and provider
+timeouts before the gateway is called. Valid mutation proposals are validated again against the
+gateway schema. Their intent ID becomes a stable idempotency key, and the existing deterministic
+policy engine remains the only component that can return `ALLOW`, `BLOCK`, `HOLD_FOR_APPROVAL`, or
+`ABSTAIN`.
+
+An optional live Gemini smoke test performs planning only:
+
+```powershell
+npm run planner:smoke -- --objective "Place an order for 19900 paise."
+```
+
+It needs `LLM_API_KEY` in the process environment. The smoke command imports no gateway, MCP,
+dispatcher, or upstream client and therefore cannot reach Razorpay. It prints only the validated
+tool, intent ID, explanation, and validation metadata; mutation arguments are not logged.
 
 Probe the official local Razorpay MCP server and retain only sanitized evidence:
 
@@ -184,6 +209,12 @@ tool fails closed. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the enforcement 
   review checks pass. This is not a general natural-language policy language.
 - Human approval is a local CLI identity and immutable file write, not strong user authentication or
   a digital signature. A compromised host can still replace the mandate supplied at startup.
+- The planner is intentionally narrow and stateless. Sensitive or payment-event-shaped objectives
+  fail closed instead of being sent to Gemini, so trusted payment identifiers must come from a
+  separate deterministic workflow rather than free-form model input.
+- Structured generation guides Gemini, but every response remains untrusted and must pass the local
+  strict schema. The deterministic fake covers repeatable tests; no live-model reliability claim is
+  made by the automated suite.
 - The final kill-switch and mandate-version check runs in the transaction that claims a reservation.
   The network call starts immediately after that transaction, so a host failure in that narrow gap
   still requires reconciliation.

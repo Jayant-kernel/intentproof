@@ -20,7 +20,9 @@
     "verify:ledger": "tsx src/cli/verify-ledger.ts",
     "lab": "tsx src/cli/lab.ts",
     "mandate": "tsx src/cli/mandate.ts",
-    "agent": "tsx src/cli/demo-agent.ts"
+    "agent": "tsx src/cli/demo-agent.ts",
+    "planner:demo": "tsx src/cli/planner-demo.ts",
+    "planner:smoke": "tsx src/cli/planner-smoke.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",
