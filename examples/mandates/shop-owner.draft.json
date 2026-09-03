@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "kind": "mandate_draft",
+  "draft_id": "dft_18478e4a83528877",
+  "draft_hash": "sha256:601239f29188ea168b7dd1aa8f815918741834fb04f1282af02e129d493d8fbc",
+  "created_at": "2026-09-01T03:30:00.000Z",
+  "compiler": {
+    "provider": "deterministic_fake",
+    "model": "frozen-rule-parser-v1"
+  },
+  "mandate_id": "mnd_demo_001",
+  "proposed_version": 1,
+  "source_text": "Create orders up to 3,000 rupees.\nKeep total action value under 25,000 rupees per day, with no more than 200 actions.\nDo not capture a payment until delivery is confirmed.\nAsk me before capturing more than 2,000 rupees.\nDo not act between 10pm and 8am.",
+  "rules": {
+    "constraints": [
+      {
+        "id": "C1",
+        "quote": "Create orders up to 3,000 rupees.",
+        "rule": "tool_allowlist",
+        "tools": ["create_order", "create_payment_link", "capture_payment"]
+      },
+      {
+        "id": "C2",
+        "quote": "Create orders up to 3,000 rupees.",
+        "rule": "amount_ceiling",
+        "tool": "create_order",
+        "max_paise": 300000
+      },
+      {
+        "id": "C3",
+        "quote": "Do not capture a payment until delivery is confirmed.",
+        "rule": "precondition",
+        "tool": "capture_payment",
+        "assert": "delivery_confirmed",
+        "on_unknown": "ABSTAIN"
+      },
+      {
+        "id": "C4",
+        "quote": "Ask me before capturing more than 2,000 rupees.",
+        "rule": "approval_gate",
+        "tool": "capture_payment",
+        "above_paise": 200000,
+        "timeout_seconds": 900
+      },
+      {
+        "id": "C5",
+        "quote": "Do not act between 10pm and 8am.",
+        "rule": "time_window",
+        "allowed": "08:00-22:00",
+        "timezone": "Asia/Kolkata"
+      }
+    ],
+    "budgets": [
+      {
+        "window": "24h",
+        "tool": "*",
+        "max_total_paise": 2500000,
+        "max_calls": 200,
+        "quote": "Keep total action value under 25,000 rupees per day, with no more than 200 actions."
+      }
+    ]
+  },
+  "review": {
+    "approvable": true,
+    "unsupported_instructions": [],
+    "ambiguities": [],
+    "conservative_assumptions": [
+      "The 24-hour budget is rolling, not calendar-day based.",
+      "Missing delivery evidence returns ABSTAIN.",
+      "An approval expires after 900 seconds.",
+      "The allowed time-window end is exclusive and uses Asia/Kolkata."
+    ],
+    "validation_errors": [],
+    "source_references": [
+      { "rule_id": "C1", "quote": "Create orders up to 3,000 rupees.", "start": 0, "end": 33 },
+      { "rule_id": "C2", "quote": "Create orders up to 3,000 rupees.", "start": 0, "end": 33 },
+      { "rule_id": "C3", "quote": "Do not capture a payment until delivery is confirmed.", "start": 118, "end": 171 },
+      { "rule_id": "C4", "quote": "Ask me before capturing more than 2,000 rupees.", "start": 172, "end": 219 },
+      { "rule_id": "C5", "quote": "Do not act between 10pm and 8am.", "start": 220, "end": 252 },
+      { "rule_id": "budget:0", "quote": "Keep total action value under 25,000 rupees per day, with no more than 200 actions.", "start": 34, "end": 117 }
+    ]
+  }
+}

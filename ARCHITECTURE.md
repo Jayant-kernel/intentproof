@@ -61,6 +61,32 @@ Terminal settlement is another compare-and-swap transaction. An authenticated `p
 webhook can settle the matching uncertain capture by payment ID. If it races with the reconciler,
 only the first terminal transition writes the budget and reconciliation audit records.
 
+## Mandate Compilation and Approval
+
+The mandate compiler is offline and outside the payment path. A provider-neutral interface has a
+Gemini adapter and a deterministic fake used by tests and the recorded demo. The prompt contains
+only a redacted merchant instruction plus the frozen output contract. It contains no gateway event,
+payment arguments, audit history, approval state, or credential.
+
+Provider JSON is parsed with a strict schema. Deterministic review then checks that every generated
+rule uses a frozen rule type, every quote is an exact source substring, spans are derived locally,
+constraint IDs are unique, and every source sentence is either represented or explicitly flagged as
+unsupported or ambiguous. Assumptions remain visible. Any unresolved item makes the draft
+non-approvable.
+
+Draft and approved mandates have separate schemas:
+
+```text
+merchant text -> untrusted compiler output -> validated, non-enforceable draft
+              -> deterministic review -> readable diff -> explicit human approval
+              -> create-once approved version + content hash -> gateway load
+```
+
+The approved hash covers the source instruction, generated rules, version, approval metadata,
+revocation state, and draft provenance. Loading recomputes it. The demo agent depends only on the
+same `IntentProofGateway.callTool` boundary used by other callers; a deterministic fake upstream is
+behind that gateway, never inside the agent.
+
 ## Counterfactual Lab
 
 The Lab is isolated under `src/lab`; the production gateway does not depend on it. A strict,

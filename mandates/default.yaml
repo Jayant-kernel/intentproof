@@ -1,13 +1,17 @@
+status: approved
 mandate_id: mnd_demo_001
 version: 1
-source_text: |
+source_text: |-
   Create orders up to 3,000 rupees.
   Keep total action value under 25,000 rupees per day, with no more than 200 actions.
   Do not capture a payment until delivery is confirmed.
   Ask me before capturing more than 2,000 rupees.
   Do not act between 10pm and 8am.
 approved_by: demo-merchant
-approved_at: null
+approved_at: 2026-09-01T09:05:00.000+05:30
+approval:
+  draft_id: dft_18478e4a83528877
+  draft_hash: sha256:601239f29188ea168b7dd1aa8f815918741834fb04f1282af02e129d493d8fbc
 revoked: false
 
 constraints:
@@ -44,3 +48,5 @@ budgets:
     max_total_paise: 2500000
     max_calls: 200
     quote: "Keep total action value under 25,000 rupees per day, with no more than 200 actions."
+
+mandate_hash: sha256:ae6fb59fc88f4d8f07bef7e93dc42f06477c2065cc1dd46f6837ffa2f45f1c99

@@ -1,0 +1,5 @@
+Create orders up to 3,000 rupees.
+Keep total action value under 25,000 rupees per day, with no more than 200 actions.
+Do not capture a payment until delivery is confirmed.
+Ask me before capturing more than 2,000 rupees.
+Do not act between 10pm and 8am.

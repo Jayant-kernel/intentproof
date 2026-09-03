@@ -26,4 +26,18 @@
 - The unsafe reference model exists only inside the Lab. Its minimized failure fixtures are
   synthetic and cannot reach the production gateway or a network transport.
 - The Lab has no dashboard, production persistence, LLM agent, or proof-bundle generator.
+- The LLM compiler may draft and explain configuration only. It cannot return policy verdicts,
+  activate a mandate, change an approved version, release budget, settle an effect, or call a payment
+  provider.
+- Drafts and approved mandates use different schemas. Only an explicitly approved, hash-valid
+  mandate can be loaded for enforcement, and approved version files are written create-once.
+- Compiler prompts contain only redacted merchant instructions. Known credential, provider-entity,
+  email, card-number, phone-number, and financial-event shapes are removed and make the draft
+  non-approvable.
+- Redaction is defense in depth, not a complete sensitive-data classifier. Merchants must provide
+  policy text only, and Gemini compilation must never receive real customer or payment data.
+- The demo agent has only the three gateway tools and no direct upstream client. Its default run uses
+  a deterministic fake upstream and synthetic identifiers.
+- CLI approval records an asserted local identity; it is not authentication, a signature, or
+  protection against a compromised host.
 - No failure story is published unless it was observed during development.

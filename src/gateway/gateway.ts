@@ -5,7 +5,7 @@ import { ZodError } from "zod";
 
 import { canonicalJson } from "../ledger/canonical.js";
 import type { AuditPayload } from "../ledger/types.js";
-import type { Mandate } from "../mandate/schema.js";
+import { mandateSchema, type Mandate } from "../mandate/schema.js";
 import { evaluatePolicy } from "../policy/evaluate.js";
 import type { PolicyContext, PolicyDecision } from "../policy/types.js";
 import type { ExecuteMutationResult, ToolExecutor } from "../executor/types.js";
@@ -37,6 +37,7 @@ export interface IntentProofGatewayOptions {
   policyContext: PolicyContextProvider;
   auditStore?: AuditSink;
   sensitiveValues?: readonly string[];
+  traceIdFactory?: () => string;
 }
 
 function argumentsDigest(arguments_: Record<string, unknown>): string {
@@ -100,10 +101,14 @@ function executorStateResult(result: ExecuteMutationResult): CallToolResult {
 }
 
 export class IntentProofGateway {
-  constructor(private readonly options: IntentProofGatewayOptions) {}
+  private readonly options: IntentProofGatewayOptions;
+
+  constructor(options: IntentProofGatewayOptions) {
+    this.options = { ...options, mandate: mandateSchema.parse(options.mandate) };
+  }
 
   async callTool(toolName: string, rawArguments: unknown): Promise<CallToolResult> {
-    const traceId = `trc_${randomUUID()}`;
+    const traceId = this.options.traceIdFactory?.() ?? `trc_${randomUUID()}`;
     if (!isGatewayToolName(toolName)) {
       const decision: PolicyDecision = {
         verdict: "BLOCK",

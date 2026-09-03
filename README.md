@@ -28,7 +28,7 @@ The project uses Razorpay Test Mode only. Never use live credentials or real cus
 - [x] SQLite-backed idempotency and dispatch-time kill-switch/version checks.
 - [x] Crash recovery and bounded read-only reconciliation for `IN_DOUBT` reservations.
 - [x] Counterfactual Lab replay foundation with bounded schedule exploration and trace minimization.
-- [ ] Offline LLM mandate compiler with human approval.
+- [x] Offline mandate compiler with strict review, explicit approval, immutable versions, and a safe demo agent.
 
 ## Setup
 
@@ -40,6 +40,39 @@ npm run build
 ```
 
 Fill `.env` locally. Never commit it.
+
+## Mandate Compiler and Approval
+
+Create a draft with the deterministic fake compiler:
+
+```powershell
+npm run mandate -- draft --input examples/mandates/shop-owner.txt --provider fake --output mandate-draft.json
+npm run mandate -- review mandate-draft.json
+npm run mandate -- approve mandate-draft.json --approved-by demo-merchant --output mandate-approved.json
+npm run mandate -- diff mandates/default.yaml mandate-approved.json
+```
+
+Use `--provider gemini` to call Gemini with `LLM_API_KEY` from the process environment. The compiler
+sends only the redacted merchant instruction. It never receives gateway events, audit rows, payment
+arguments, or Razorpay credentials. Malformed output, timeout, unknown fields, missing source
+coverage, unsupported instructions, ambiguity, and quotes that are not exact source substrings all
+fail closed.
+
+A draft is a separate schema and cannot be loaded by the gateway. `approve` requires a named human
+approver, prints the rule diff first, assigns the proposed version, and creates an approved artifact
+with a deterministic content hash and draft provenance. Approved files use create-once writes, so an
+existing version is never overwritten.
+
+Run the deterministic agent demonstration against the fake upstream:
+
+```powershell
+npm run agent
+```
+
+The transcript shows the agent request, matching mandate quote, deterministic verdict, upstream-call
+count, and audit evidence for allowed, blocked, held, abstained, kill-switch, and stale-version
+cases. The demo agent receives only the IntentProof gateway interface and has no upstream client or
+credentials.
 
 Probe the official local Razorpay MCP server and retain only sanitized evidence:
 
@@ -146,6 +179,11 @@ tool fails closed. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the enforcement 
 - Counterfactual Lab is a deterministic model, not a Razorpay conformance test or a proof of every
   possible execution. Exploration is bounded, in-memory, and limited to the modeled actions and
   faults; state pruning relies on the documented normalized projection.
+- The compiler accepts only the frozen rule vocabulary. Its deterministic fake recognizes the demo
+  phrasing, while Gemini output remains untrusted until schema, source-coverage, quote, and human
+  review checks pass. This is not a general natural-language policy language.
+- Human approval is a local CLI identity and immutable file write, not strong user authentication or
+  a digital signature. A compromised host can still replace the mandate supplied at startup.
 - The final kill-switch and mandate-version check runs in the transaction that claims a reservation.
   The network call starts immediately after that transaction, so a host failure in that narrow gap
   still requires reconciliation.
