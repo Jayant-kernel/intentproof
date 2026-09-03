@@ -90,6 +90,7 @@ export function reduceLabState(current: LabState, event: LabEvent): LabState {
     case "DISPATCH_CLAIMED": {
       const intent = intentFor(state, event.intent_id);
       intent.dispatchClaimed = true;
+      intent.claimedMandateVersion = event.mandate_version;
       addEvidence(intent, event.event_id);
       break;
     }
@@ -191,6 +192,10 @@ export function reduceLabState(current: LabState, event: LabEvent): LabState {
       state.authority.revoked = true;
       state.authority.revokedAtSequence = state.sequence;
       state.authority.mandateVersion = event.mandate_version;
+      state.authority.revokedThroughVersion = Math.max(
+        state.authority.revokedThroughVersion,
+        event.mandate_version
+      );
       break;
     }
     case "OPERATOR_DECIDED": {

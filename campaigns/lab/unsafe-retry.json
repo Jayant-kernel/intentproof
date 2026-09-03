@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "exploration_id": "unsafe-retry-discovery",
+  "name": "Retry, timeout, and settlement interleavings",
+  "seed": 2909,
+  "initial_time_ms": 0,
+  "model": "unsafe_reference",
+  "workflow": {
+    "intent_id": "generated-intent",
+    "idempotency_key": "generated-idempotency",
+    "tool": "create_order",
+    "amount_paise": 50000,
+    "mandate_version": 1,
+    "faults": [
+      "timeout_after_acceptance",
+      "retry",
+      "duplicate_webhook",
+      "webhook_reconciler_race"
+    ]
+  },
+  "bounds": {
+    "max_events": 20,
+    "max_schedules": 64,
+    "max_depth": 20,
+    "max_runtime_ms": 5000
+  }
+}

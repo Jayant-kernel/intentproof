@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "fixture_id": "unsafe-retry-discovery-one_intent_one_effect",
+  "source_exploration_id": "unsafe-retry-discovery",
+  "seed": 2909,
+  "initial_time_ms": 0,
+  "invariant_id": "ONE_INTENT_ONE_EFFECT",
+  "events": [
+    {
+      "schema_version": 1,
+      "event_id": "generated-request",
+      "at_ms": 0,
+      "type": "AGENT_TOOL_REQUESTED",
+      "intent_id": "generated-intent",
+      "idempotency_key": "generated-idempotency",
+      "tool": "create_order",
+      "amount_paise": 50000,
+      "currency": "INR"
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-policy",
+      "at_ms": 0,
+      "type": "POLICY_DECIDED",
+      "intent_id": "generated-intent",
+      "verdict": "ALLOW",
+      "rule_id": "GENERATED_ALLOW"
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-reserve",
+      "at_ms": 0,
+      "type": "BUDGET_RESERVED",
+      "intent_id": "generated-intent"
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-dispatch",
+      "at_ms": 0,
+      "type": "DISPATCH_CLAIMED",
+      "intent_id": "generated-intent",
+      "mandate_version": 1
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-provider-call-sent",
+      "at_ms": 0,
+      "type": "PROVIDER_MUTATION_SENT",
+      "intent_id": "generated-intent",
+      "attempt_id": "generated-intent-provider-call"
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-timeout",
+      "at_ms": 0,
+      "type": "TIMEOUT_OBSERVED",
+      "intent_id": "generated-intent",
+      "phase": "AFTER_ACCEPTANCE"
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-reconcile",
+      "at_ms": 0,
+      "type": "RECONCILIATION_READ",
+      "intent_id": "generated-intent",
+      "outcome": "MATCHED_COMMITTED",
+      "effect_id": "lab_effect_2d77ab01a3f4f20e"
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-retry-request",
+      "at_ms": 0,
+      "type": "AGENT_TOOL_REQUESTED",
+      "intent_id": "generated-intent",
+      "idempotency_key": "generated-idempotency",
+      "tool": "create_order",
+      "amount_paise": 50000,
+      "currency": "INR"
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-retry-dispatch",
+      "at_ms": 0,
+      "type": "DISPATCH_CLAIMED",
+      "intent_id": "generated-intent",
+      "mandate_version": 1
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-retry-provider-call-sent",
+      "at_ms": 0,
+      "type": "PROVIDER_MUTATION_SENT",
+      "intent_id": "generated-intent",
+      "attempt_id": "generated-intent-retry-provider-call"
+    },
+    {
+      "schema_version": 1,
+      "event_id": "generated-retry-provider-call-accepted",
+      "at_ms": 0,
+      "type": "PROVIDER_ACCEPTED",
+      "intent_id": "generated-intent",
+      "attempt_id": "generated-intent-retry-provider-call",
+      "effect_id": "lab_effect_79629b747f51fdee",
+      "provider_state": "created"
+    }
+  ],
+  "expected": {
+    "unsafe_reference_pass": false,
+    "intentproof_pass": true
+  }
+}

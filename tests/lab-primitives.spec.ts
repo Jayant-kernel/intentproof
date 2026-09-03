@@ -5,7 +5,11 @@ import { SeededRandom } from "../src/lab/random.js";
 import { reduceLabState } from "../src/lab/reducer.js";
 import type { LabEvent } from "../src/lab/schema.js";
 import { DeterministicScheduler } from "../src/lab/scheduler.js";
-import { initialLabState } from "../src/lab/state.js";
+import {
+  executeProviderMutation,
+  recordProviderAcceptance
+} from "../src/lab/provider-model.js";
+import { emptyIntent, initialLabState } from "../src/lab/state.js";
 
 describe("Counterfactual Lab deterministic primitives", () => {
   it("uses a monotonic virtual clock", () => {
@@ -59,5 +63,51 @@ describe("Counterfactual Lab deterministic primitives", () => {
     expect(initial).toEqual(untouched);
     expect(first).toEqual(second);
     expect(first).not.toBe(initial);
+  });
+
+  it("executes only the three supported provider behaviors", () => {
+    const expected = {
+      create_order: "created",
+      create_payment_link: "created",
+      capture_payment: "captured"
+    } as const;
+
+    for (const [tool, state] of Object.entries(expected)) {
+      const intent = emptyIntent(tool);
+      intent.request = {
+        idempotencyKey: `${tool}-key`,
+        tool: tool as keyof typeof expected,
+        amountPaise: 100,
+        currency: "INR"
+      };
+      expect(
+        executeProviderMutation(initialLabState(0).provider, intent, "attempt", "intentproof")
+      ).toMatchObject({ accepted: true, state });
+    }
+  });
+
+  it("keeps provider effects idempotent while the unsafe model duplicates retries", () => {
+    const intent = emptyIntent("intent");
+    intent.request = {
+      idempotencyKey: "stable-key",
+      tool: "create_order",
+      amountPaise: 100,
+      currency: "INR"
+    };
+    const first = executeProviderMutation(initialLabState(0).provider, intent, "first", "intentproof");
+    expect(first.accepted).toBe(true);
+    if (!first.accepted) return;
+    const provider = recordProviderAcceptance(
+      initialLabState(0).provider,
+      intent,
+      first.effectId,
+      first.state
+    );
+    const safeRetry = executeProviderMutation(provider, intent, "second", "intentproof");
+    const unsafeRetry = executeProviderMutation(provider, intent, "second", "unsafe_reference");
+
+    expect(safeRetry).toMatchObject({ accepted: true, effectId: first.effectId });
+    expect(unsafeRetry).toMatchObject({ accepted: true });
+    if (unsafeRetry.accepted) expect(unsafeRetry.effectId).not.toBe(first.effectId);
   });
 });

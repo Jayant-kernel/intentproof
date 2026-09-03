@@ -27,7 +27,7 @@ The project uses Razorpay Test Mode only. Never use live credentials or real cus
 - [x] Transactional `RESERVED`, `COMMITTED`, `RELEASED`, and `IN_DOUBT` executor lifecycle.
 - [x] SQLite-backed idempotency and dispatch-time kill-switch/version checks.
 - [x] Crash recovery and bounded read-only reconciliation for `IN_DOUBT` reservations.
-- [x] Counterfactual Lab Month 1: seeded replay, fake provider events, and seven invariant checks.
+- [x] Counterfactual Lab replay foundation with bounded schedule exploration and trace minimization.
 - [ ] Offline LLM mandate compiler with human approval.
 
 ## Setup
@@ -102,14 +102,24 @@ Run a Counterfactual Lab scenario without contacting Razorpay:
 ```powershell
 npm run lab -- run scenarios/lab/timeout-after-acceptance.json
 npm run lab -- replay scenarios/lab/webhook-reconciler-race.json --seed 808
+npm run lab -- explore campaigns/lab/unsafe-retry.json
+npm run lab -- reproduce regressions/lab/unsafe-retry-discovery-one_intent_one_effect.json
 ```
 
-Both commands validate the versioned JSON scenario, order equal-time events from the supplied seed,
-reduce the event stream from a clean virtual clock, and print a canonical report. Replaying the same
-scenario with the same seed produces the same normalized state and SHA-256 state hash. The eight
-checked-in scenarios cover timeout after acceptance, duplicate and out-of-order webhooks, retry,
-crash and restart, revocation during dispatch, a malformed reconciliation read, and a webhook racing
-the reconciler. They use the in-memory fake provider model only.
+`run` uses the seed stored in a scenario. `replay` requires an explicit seed, so a reported run can
+be repeated without silently using a different schedule. Both commands validate the versioned JSON
+event stream, order equal-time events deterministically, reduce it from a clean virtual clock, and
+print a canonical report. The eight checked-in scenarios cover timeout after acceptance, duplicate
+and out-of-order webhooks, retry, crash and restart, revocation during dispatch, a malformed read,
+and a webhook racing the reconciler.
+
+`explore` starts from a compact workflow and fault list rather than an authored event order. It
+walks valid equal-time interleavings within explicit event, schedule, depth, and runtime limits,
+prunes equivalent normalized states, and minimizes the first failure for each invariant. The
+checked-in unsafe retry campaign independently finds a one-intent/two-effect failure and writes a
+versioned regression fixture. `reproduce` runs that fixture against both the deliberately unsafe
+reference model and the guarded IntentProof model. Every Lab command uses the in-memory fake
+provider only; none has a Razorpay transport.
 
 ## Scope
 
@@ -133,8 +143,9 @@ tool fails closed. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the enforcement 
 - Razorpay read-after-write timing and payment-link pagination behavior are not verified. Empty,
   delayed, contradictory, or ambiguous reads stay charged and require later retry or human review.
 - Idempotency is enforced by this SQLite store. It is not a global exactly-once guarantee.
-- Counterfactual Lab is a deterministic model, not a Razorpay conformance test. Month 1 replays
-  authored event streams; it does not search every interleaving or minimize failing traces.
+- Counterfactual Lab is a deterministic model, not a Razorpay conformance test or a proof of every
+  possible execution. Exploration is bounded, in-memory, and limited to the modeled actions and
+  faults; state pruning relies on the documented normalized projection.
 - The final kill-switch and mandate-version check runs in the transaction that claims a reservation.
   The network call starts immediately after that transaction, so a host failure in that narrow gap
   still requires reconciliation.

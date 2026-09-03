@@ -74,10 +74,22 @@ recognizes only `create_order`, `create_payment_link`, and `capture_payment`; it
 transport. Normalized records and arrays make the final state suitable for byte-for-byte replay and
 hashing.
 
-Seven independent checks inspect the trace and final state: denied or held work cannot mutate the
-provider, an intent cannot gain two effects, uncertain effects keep their budget charge, committed
-money state cannot move backwards, revocation stops later dispatch, competing settlement signals
-settle once, and every terminal result points to reconstructable evidence. A failing invariant makes
-the CLI report fail even when the reducer can represent the bad input trace.
+Nine independent checks inspect both raw history and normalized state. They cover non-`ALLOW`
+dispatch, intent-to-effect and effect-to-intent uniqueness, impossible or contradictory provider
+history, charged uncertainty, monotonic committed money state, version-aware revocation, single
+settlement, and reconstructable terminal evidence. Stale lower-ranked provider observations remain
+visible as findings even when the reducer correctly ignores their attempted state regression.
+
+The explorer accepts a compact workflow, a set of modeled faults, and hard bounds. It expands these
+into a partial order, enumerates eligible equal-time actions in seeded order, and hashes a normalized
+state plus the remaining action set to prune equivalent prefixes. Reports separate completed
+schedules, unique states, pruned states, failures, and each bound hit.
+
+Provider behavior is executable for only the three supported tools. The IntentProof model applies
+idempotency and the dispatch-time mandate check; a deliberately unsafe reference model contains
+small retry, revocation, uncertainty-release, and settlement defects. When the explorer finds an
+invariant failure, delta debugging removes events and simplifies timing while preserving the same
+failure ID and causal validity. The resulting versioned JSON fixture is then replayed against both
+models. A comparison counts as reproduced only when the unsafe model fails and IntentProof passes.
 
 The current safety limits and deliberately narrow claims are documented in [SAFETY.md](./SAFETY.md).

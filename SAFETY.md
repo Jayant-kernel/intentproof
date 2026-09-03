@@ -21,6 +21,9 @@
   and its scenarios contain no credentials or real payment data.
 - The Lab reducer and invariant checks are deterministic code. No LLM authorizes a call, settles an
   effect, validates a signature, releases budget, or decides whether an invariant passed.
-- Month 1 covers replay of explicit scenarios, not exhaustive state-space exploration, provider API
-  conformance, trace minimization, a dashboard, or a proof bundle.
+- Schedule exploration is bounded and covers only the fake provider, modeled faults, and partial
+  orders in each campaign. It is not exhaustive verification or provider API conformance.
+- The unsafe reference model exists only inside the Lab. Its minimized failure fixtures are
+  synthetic and cannot reach the production gateway or a network transport.
+- The Lab has no dashboard, production persistence, LLM agent, or proof-bundle generator.
 - No failure story is published unless it was observed during development.

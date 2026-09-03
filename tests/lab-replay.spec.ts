@@ -24,7 +24,7 @@ describe("Counterfactual Lab replay", () => {
       const { report } = runLabScenarioFile(path);
       expect(report.passed, report.scenario_id).toBe(true);
       expect(report.expectation_matched, report.scenario_id).toBe(true);
-      expect(report.invariants).toHaveLength(7);
+      expect(report.invariants).toHaveLength(9);
       expect(report.invariants.every((invariant) => invariant.passed)).toBe(true);
     }
   });

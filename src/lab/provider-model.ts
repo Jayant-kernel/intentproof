@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { LabIntentState, LabProviderState } from "./state.js";
 import type { ProviderState } from "./schema.js";
 
@@ -46,6 +48,9 @@ export function recordProviderAcceptance(
     existing.stateRank = rank;
   }
   if (!intent.providerEffectIds.includes(effectId)) intent.providerEffectIds.push(effectId);
+  if (intent.request) {
+    next.idempotencyEffects[`${intent.request.tool}:${intent.request.idempotencyKey}`] = effectId;
+  }
   return next;
 }
 
@@ -56,4 +61,40 @@ export function recordProviderRejection(
   const next = structuredClone(provider);
   if (!next.rejectedIntentIds.includes(intentId)) next.rejectedIntentIds.push(intentId);
   return next;
+}
+
+export type ProviderModelMode = "intentproof" | "unsafe_reference";
+
+export type ProviderExecution =
+  | { accepted: true; effectId: string; state: ProviderState }
+  | { accepted: false; reason: string };
+
+function generatedEffectId(material: string): string {
+  return `lab_effect_${createHash("sha256").update(material).digest("hex").slice(0, 16)}`;
+}
+
+export function executeProviderMutation(
+  provider: LabProviderState,
+  intent: LabIntentState,
+  attemptId: string,
+  mode: ProviderModelMode
+): ProviderExecution {
+  if (!intent.request) return { accepted: false, reason: "request missing" };
+
+  const requestKey = `${intent.request.tool}:${intent.request.idempotencyKey}`;
+  const existingEffect = provider.idempotencyEffects[requestKey];
+  const effectId =
+    mode === "intentproof" && existingEffect
+      ? existingEffect
+      : generatedEffectId(
+          mode === "intentproof" ? requestKey : `${requestKey}:${attemptId}`
+        );
+
+  switch (intent.request.tool) {
+    case "create_order":
+    case "create_payment_link":
+      return { accepted: true, effectId, state: "created" };
+    case "capture_payment":
+      return { accepted: true, effectId, state: "captured" };
+  }
 }

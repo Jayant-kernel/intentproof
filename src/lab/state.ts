@@ -17,6 +17,7 @@ export interface LabIntentState {
   ruleId: string | null;
   dispatchState: LabDispatchState;
   dispatchClaimed: boolean;
+  claimedMandateVersion: number | null;
   mutationAttemptIds: string[];
   providerEffectIds: string[];
   budgetCharged: boolean;
@@ -38,6 +39,7 @@ export interface ProviderEffect {
 export interface LabProviderState {
   mutationAttemptIds: string[];
   effects: Record<string, ProviderEffect>;
+  idempotencyEffects: Record<string, string>;
   rejectedIntentIds: string[];
 }
 
@@ -49,6 +51,7 @@ export interface LabState {
     revoked: boolean;
     revokedAtSequence: number | null;
     mandateVersion: number | null;
+    revokedThroughVersion: number;
   };
   process: {
     running: boolean;
@@ -69,7 +72,8 @@ export function initialLabState(initialTimeMs: number): LabState {
     authority: {
       revoked: false,
       revokedAtSequence: null,
-      mandateVersion: null
+      mandateVersion: null,
+      revokedThroughVersion: 0
     },
     process: {
       running: true,
@@ -80,6 +84,7 @@ export function initialLabState(initialTimeMs: number): LabState {
     provider: {
       mutationAttemptIds: [],
       effects: {},
+      idempotencyEffects: {},
       rejectedIntentIds: []
     },
     seenWebhookDeliveries: [],
@@ -96,6 +101,7 @@ export function emptyIntent(intentId: string): LabIntentState {
     ruleId: null,
     dispatchState: "NONE",
     dispatchClaimed: false,
+    claimedMandateVersion: null,
     mutationAttemptIds: [],
     providerEffectIds: [],
     budgetCharged: false,
@@ -126,6 +132,7 @@ export function normalizeLabState(state: LabState): LabState {
     )
   );
   normalized.provider.effects = sortedRecord(normalized.provider.effects);
+  normalized.provider.idempotencyEffects = sortedRecord(normalized.provider.idempotencyEffects);
   normalized.provider.mutationAttemptIds.sort();
   normalized.provider.rejectedIntentIds.sort();
   normalized.seenWebhookDeliveries.sort();

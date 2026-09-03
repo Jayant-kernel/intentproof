@@ -71,6 +71,7 @@ export const labEventSchema = z.discriminatedUnion("type", [
     .extend({
       type: z.literal("PROVIDER_ACCEPTED"),
       intent_id: intentId,
+      attempt_id: z.string().min(1).max(128).optional(),
       effect_id: z.string().min(1).max(128),
       provider_state: providerStateSchema
     })
