@@ -27,6 +27,7 @@ The project uses Razorpay Test Mode only. Never use live credentials or real cus
 - [x] Transactional `RESERVED`, `COMMITTED`, `RELEASED`, and `IN_DOUBT` executor lifecycle.
 - [x] SQLite-backed idempotency and dispatch-time kill-switch/version checks.
 - [x] Crash recovery and bounded read-only reconciliation for `IN_DOUBT` reservations.
+- [x] Counterfactual Lab Month 1: seeded replay, fake provider events, and seven invariant checks.
 - [ ] Offline LLM mandate compiler with human approval.
 
 ## Setup
@@ -96,6 +97,20 @@ npm run export:ledger
 npm run verify:ledger
 ```
 
+Run a Counterfactual Lab scenario without contacting Razorpay:
+
+```powershell
+npm run lab -- run scenarios/lab/timeout-after-acceptance.json
+npm run lab -- replay scenarios/lab/webhook-reconciler-race.json --seed 808
+```
+
+Both commands validate the versioned JSON scenario, order equal-time events from the supplied seed,
+reduce the event stream from a clean virtual clock, and print a canonical report. Replaying the same
+scenario with the same seed produces the same normalized state and SHA-256 state hash. The eight
+checked-in scenarios cover timeout after acceptance, duplicate and out-of-order webhooks, retry,
+crash and restart, revocation during dispatch, a malformed reconciliation read, and a webhook racing
+the reconciler. They use the in-memory fake provider model only.
+
 ## Scope
 
 The MVP supports `create_order`, `create_payment_link`, and `capture_payment`. Every other mutating
@@ -118,6 +133,8 @@ tool fails closed. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the enforcement 
 - Razorpay read-after-write timing and payment-link pagination behavior are not verified. Empty,
   delayed, contradictory, or ambiguous reads stay charged and require later retry or human review.
 - Idempotency is enforced by this SQLite store. It is not a global exactly-once guarantee.
+- Counterfactual Lab is a deterministic model, not a Razorpay conformance test. Month 1 replays
+  authored event streams; it does not search every interleaving or minimize failing traces.
 - The final kill-switch and mandate-version check runs in the transaction that claims a reservation.
   The network call starts immediately after that transaction, so a host failure in that narrow gap
   still requires reconciliation.

@@ -17,4 +17,10 @@
   dispatchers may still return a definitive failure to test the generic executor transition.
 - Reconciliation leases and terminal changes are scoped to the local SQLite database. They do not
   establish exactly-once network delivery.
+- Counterfactual Lab uses an in-memory fake provider and a virtual clock. It cannot call Razorpay,
+  and its scenarios contain no credentials or real payment data.
+- The Lab reducer and invariant checks are deterministic code. No LLM authorizes a call, settles an
+  effect, validates a signature, releases budget, or decides whether an invariant passed.
+- Month 1 covers replay of explicit scenarios, not exhaustive state-space exploration, provider API
+  conformance, trace minimization, a dashboard, or a proof bundle.
 - No failure story is published unless it was observed during development.

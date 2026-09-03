@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "scenario_id": "revocation-race",
+  "name": "Revocation between two intents",
+  "description": "An earlier order dispatches, then authority is revoked and a later request is blocked.",
+  "seed": 606,
+  "initial_time_ms": 0,
+  "events": [
+    { "schema_version": 1, "event_id": "e1", "at_ms": 0, "type": "AGENT_TOOL_REQUESTED", "intent_id": "intent-before-revoke", "idempotency_key": "idem-before", "tool": "create_order", "amount_paise": 20000, "currency": "INR" },
+    { "schema_version": 1, "event_id": "e2", "at_ms": 10, "type": "POLICY_DECIDED", "intent_id": "intent-before-revoke", "verdict": "ALLOW", "rule_id": "ALLOW_ORDER" },
+    { "schema_version": 1, "event_id": "e3", "at_ms": 20, "type": "BUDGET_RESERVED", "intent_id": "intent-before-revoke" },
+    { "schema_version": 1, "event_id": "e4", "at_ms": 30, "type": "DISPATCH_CLAIMED", "intent_id": "intent-before-revoke", "mandate_version": 1 },
+    { "schema_version": 1, "event_id": "e5", "at_ms": 40, "type": "PROVIDER_MUTATION_SENT", "intent_id": "intent-before-revoke", "attempt_id": "attempt-before" },
+    { "schema_version": 1, "event_id": "e6", "at_ms": 50, "type": "PROVIDER_ACCEPTED", "intent_id": "intent-before-revoke", "effect_id": "effect-before", "provider_state": "created" },
+    { "schema_version": 1, "event_id": "e7", "at_ms": 60, "type": "AUTHORITY_REVOKED", "mandate_version": 1, "reason": "merchant revoked authority" },
+    { "schema_version": 1, "event_id": "e8", "at_ms": 70, "type": "AGENT_TOOL_REQUESTED", "intent_id": "intent-after-revoke", "idempotency_key": "idem-after", "tool": "create_order", "amount_paise": 20000, "currency": "INR" },
+    { "schema_version": 1, "event_id": "e9", "at_ms": 80, "type": "POLICY_DECIDED", "intent_id": "intent-after-revoke", "verdict": "BLOCK", "rule_id": "MANDATE_REVOKED" }
+  ],
+  "expected": { "invariants_pass": true }
+}

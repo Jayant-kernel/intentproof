@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "scenario_id": "duplicate-webhook",
+  "name": "Duplicate captured webhook",
+  "description": "A captured payment webhook is delivered twice with one delivery identifier and settles once.",
+  "seed": 202,
+  "initial_time_ms": 0,
+  "events": [
+    { "schema_version": 1, "event_id": "e1", "at_ms": 0, "type": "AGENT_TOOL_REQUESTED", "intent_id": "intent-duplicate", "idempotency_key": "idem-duplicate", "tool": "capture_payment", "amount_paise": 30000, "currency": "INR" },
+    { "schema_version": 1, "event_id": "e2", "at_ms": 10, "type": "POLICY_DECIDED", "intent_id": "intent-duplicate", "verdict": "ALLOW", "rule_id": "ALLOW_CAPTURE" },
+    { "schema_version": 1, "event_id": "e3", "at_ms": 20, "type": "BUDGET_RESERVED", "intent_id": "intent-duplicate" },
+    { "schema_version": 1, "event_id": "e4", "at_ms": 30, "type": "DISPATCH_CLAIMED", "intent_id": "intent-duplicate", "mandate_version": 1 },
+    { "schema_version": 1, "event_id": "e5", "at_ms": 40, "type": "PROVIDER_MUTATION_SENT", "intent_id": "intent-duplicate", "attempt_id": "attempt-duplicate" },
+    { "schema_version": 1, "event_id": "e6", "at_ms": 50, "type": "PROVIDER_ACCEPTED", "intent_id": "intent-duplicate", "effect_id": "effect-duplicate", "provider_state": "captured" },
+    { "schema_version": 1, "event_id": "e7", "at_ms": 60, "type": "TIMEOUT_OBSERVED", "intent_id": "intent-duplicate", "phase": "AFTER_ACCEPTANCE" },
+    { "schema_version": 1, "event_id": "e8", "at_ms": 70, "type": "WEBHOOK_DELIVERED", "intent_id": "intent-duplicate", "delivery_id": "delivery-same", "effect_id": "effect-duplicate", "provider_state": "captured" },
+    { "schema_version": 1, "event_id": "e9", "at_ms": 80, "type": "WEBHOOK_DELIVERED", "intent_id": "intent-duplicate", "delivery_id": "delivery-same", "effect_id": "effect-duplicate", "provider_state": "captured" }
+  ],
+  "expected": { "invariants_pass": true }
+}

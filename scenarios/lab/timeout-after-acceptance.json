@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "scenario_id": "timeout-after-acceptance",
+  "name": "Timeout after provider acceptance",
+  "description": "The provider creates an order, but the response is lost and the reservation stays charged.",
+  "seed": 101,
+  "initial_time_ms": 0,
+  "events": [
+    { "schema_version": 1, "event_id": "e1", "at_ms": 0, "type": "AGENT_TOOL_REQUESTED", "intent_id": "intent-timeout", "idempotency_key": "idem-timeout", "tool": "create_order", "amount_paise": 50000, "currency": "INR" },
+    { "schema_version": 1, "event_id": "e2", "at_ms": 10, "type": "POLICY_DECIDED", "intent_id": "intent-timeout", "verdict": "ALLOW", "rule_id": "ALLOW_ORDER" },
+    { "schema_version": 1, "event_id": "e3", "at_ms": 20, "type": "BUDGET_RESERVED", "intent_id": "intent-timeout" },
+    { "schema_version": 1, "event_id": "e4", "at_ms": 30, "type": "DISPATCH_CLAIMED", "intent_id": "intent-timeout", "mandate_version": 1 },
+    { "schema_version": 1, "event_id": "e5", "at_ms": 40, "type": "PROVIDER_MUTATION_SENT", "intent_id": "intent-timeout", "attempt_id": "attempt-timeout" },
+    { "schema_version": 1, "event_id": "e6", "at_ms": 50, "type": "PROVIDER_ACCEPTED", "intent_id": "intent-timeout", "effect_id": "effect-timeout", "provider_state": "created" },
+    { "schema_version": 1, "event_id": "e7", "at_ms": 60, "type": "TIMEOUT_OBSERVED", "intent_id": "intent-timeout", "phase": "AFTER_ACCEPTANCE" }
+  ],
+  "expected": { "invariants_pass": true }
+}

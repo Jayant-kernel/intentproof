@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "export:ledger": "tsx src/cli/export-ledger.ts",
-    "verify:ledger": "tsx src/cli/verify-ledger.ts"
+    "verify:ledger": "tsx src/cli/verify-ledger.ts",
+    "lab": "tsx src/cli/lab.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",

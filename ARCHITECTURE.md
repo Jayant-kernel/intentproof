@@ -61,4 +61,23 @@ Terminal settlement is another compare-and-swap transaction. An authenticated `p
 webhook can settle the matching uncertain capture by payment ID. If it races with the reconciler,
 only the first terminal transition writes the budget and reconciliation audit records.
 
+## Counterfactual Lab
+
+The Lab is isolated under `src/lab`; the production gateway does not depend on it. A strict,
+versioned Zod schema describes requests, policy results, reservations, dispatch claims, provider
+results, timeouts, crashes, webhooks, reconciliation reads, revocation, and operator decisions.
+Scenarios are JSON event streams with an initial virtual time and a 32-bit seed.
+
+A virtual clock, seeded random source, and stable scheduler turn a scenario into one normalized event
+order. A pure reducer clones its input and derives the next in-memory state. The fake provider model
+recognizes only `create_order`, `create_payment_link`, and `capture_payment`; it has no network
+transport. Normalized records and arrays make the final state suitable for byte-for-byte replay and
+hashing.
+
+Seven independent checks inspect the trace and final state: denied or held work cannot mutate the
+provider, an intent cannot gain two effects, uncertain effects keep their budget charge, committed
+money state cannot move backwards, revocation stops later dispatch, competing settlement signals
+settle once, and every terminal result points to reconstructable evidence. A failing invariant makes
+the CLI report fail even when the reducer can represent the bad input trace.
+
 The current safety limits and deliberately narrow claims are documented in [SAFETY.md](./SAFETY.md).

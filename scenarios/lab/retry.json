@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "scenario_id": "retry",
+  "name": "Agent retry after timeout",
+  "description": "The same logical payment-link request is retried without sending a second mutation.",
+  "seed": 404,
+  "initial_time_ms": 0,
+  "events": [
+    { "schema_version": 1, "event_id": "e1", "at_ms": 0, "type": "AGENT_TOOL_REQUESTED", "intent_id": "intent-retry", "idempotency_key": "idem-retry", "tool": "create_payment_link", "amount_paise": 45000, "currency": "INR" },
+    { "schema_version": 1, "event_id": "e2", "at_ms": 10, "type": "POLICY_DECIDED", "intent_id": "intent-retry", "verdict": "ALLOW", "rule_id": "ALLOW_LINK" },
+    { "schema_version": 1, "event_id": "e3", "at_ms": 20, "type": "BUDGET_RESERVED", "intent_id": "intent-retry" },
+    { "schema_version": 1, "event_id": "e4", "at_ms": 30, "type": "DISPATCH_CLAIMED", "intent_id": "intent-retry", "mandate_version": 1 },
+    { "schema_version": 1, "event_id": "e5", "at_ms": 40, "type": "PROVIDER_MUTATION_SENT", "intent_id": "intent-retry", "attempt_id": "attempt-retry" },
+    { "schema_version": 1, "event_id": "e6", "at_ms": 50, "type": "TIMEOUT_OBSERVED", "intent_id": "intent-retry", "phase": "BEFORE_ACCEPTANCE" },
+    { "schema_version": 1, "event_id": "e7", "at_ms": 60, "type": "AGENT_TOOL_REQUESTED", "intent_id": "intent-retry", "idempotency_key": "idem-retry", "tool": "create_payment_link", "amount_paise": 45000, "currency": "INR" },
+    { "schema_version": 1, "event_id": "e8", "at_ms": 70, "type": "RECONCILIATION_READ", "intent_id": "intent-retry", "outcome": "EMPTY" }
+  ],
+  "expected": { "invariants_pass": true }
+}
