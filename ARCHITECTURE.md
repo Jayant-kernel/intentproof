@@ -151,3 +151,23 @@ failure ID and causal validity. The resulting versioned JSON fixture is then rep
 models. A comparison counts as reproduced only when the unsafe model fails and IntentProof passes.
 
 The current safety limits and deliberately narrow claims are documented in [SAFETY.md](./SAFETY.md).
+
+## Evidence Bundle
+
+The evidence CLI builds a self-contained directory of canonical JSON summaries and a strict
+version-1 manifest. Each artifact is scanned before writing, hashed with SHA-256, and assigned one
+provenance label. The manifest repeats the measured scoreboard, records the ledger verification
+result and current git commit, then adds a digest over the complete manifest content except the
+digest field itself.
+
+Verification parses the manifest with a strict schema, enforces the allowed provenance for each
+evidence class, recomputes the bundle digest and every artifact hash, checks canonical byte form,
+rejects path traversal, and scans artifact content again. The real-webhook slot accepts only
+`REAL_RAZORPAY_TEST_MODE` or `PENDING_EXTERNAL_REPLAY`; synthetic chaos and local fixture results
+cannot occupy it. A supplied creation time makes repeated builds byte-identical. Without one, the
+stable checked-out commit time is used.
+
+The scoreboard is derived from local test results, the checked-in gateway and lifecycle evidence,
+the bounded Lab explorer and regression replay, and ledger verification. It does not estimate money
+saved, production reliability, exhaustive safety, or user impact. Hashes establish integrity only;
+they are not signatures and do not establish who created the bundle.

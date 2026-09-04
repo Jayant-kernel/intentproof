@@ -1,0 +1,1 @@
+{"denied_calls":[{"expected_verdict":"BLOCK","observed_verdict":"BLOCK","upstream_tool_calls":0},{"expected_verdict":"HOLD_FOR_APPROVAL","observed_verdict":"HOLD_FOR_APPROVAL","upstream_tool_calls":0},{"expected_verdict":"ABSTAIN","observed_verdict":"ABSTAIN","upstream_tool_calls":0}],"schema_version":1,"total_upstream_calls":0}

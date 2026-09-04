@@ -25,7 +25,8 @@
   orders in each campaign. It is not exhaustive verification or provider API conformance.
 - The unsafe reference model exists only inside the Lab. Its minimized failure fixtures are
   synthetic and cannot reach the production gateway or a network transport.
-- The Lab has no dashboard, production persistence, LLM agent, or proof-bundle generator.
+- The Lab has no dashboard, production persistence, or network-capable LLM agent. Its summaries may
+  be included in the local proof bundle with `SYNTHETIC_CHAOS` provenance only.
 - The LLM compiler may draft and explain configuration only. It cannot return policy verdicts,
   activate a mandate, change an approved version, release budget, settle an effect, or call a payment
   provider.
@@ -52,4 +53,11 @@
   free of sensitive data. Operators must use synthetic objectives for live-model smoke testing.
 - CLI approval records an asserted local identity; it is not authentication, a signature, or
   protection against a compromised host.
+- Proof bundles reject raw webhook-shaped payloads, credential assignments, contact data, and
+  real-looking provider IDs. Real identifiers may appear only as one-way SHA-256 hashes in the
+  dedicated sanitized webhook report.
+- Evidence provenance is schema-required and evidence classes have fixed allowed labels. Mocked,
+  deterministic, and synthetic results cannot be relabelled as genuine Razorpay delivery evidence.
+- Artifact and bundle hashes detect tampering but do not prove authorship, freshness, or provider
+  identity. No signing key or cryptographic identity claim is made.
 - No failure story is published unless it was observed during development.

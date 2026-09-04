@@ -1,0 +1,1 @@
+{"direct_upstream_access":false,"malformed_output_fails_closed":true,"prompt_injection_bypass":false,"provider":"mocked_gemini","schema_version":1,"strict_tool_allowlist":["create_order","create_payment_link","capture_payment","no_action"]}

@@ -20,10 +20,10 @@ export type WebhookRecordStatus =
 
 export interface WebhookRecordInput {
   eventId: string;
-  eventType: string;
-  paymentId?: string;
-  operation?: string;
-  stateRank?: number;
+  eventType: "payment.authorized" | "payment.captured" | "order.paid";
+  paymentId: string;
+  operation: "authorize" | "capture";
+  stateRank: 2 | 3;
 }
 
 export interface WebhookRecordResult {

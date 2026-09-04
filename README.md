@@ -21,7 +21,7 @@ The project uses Razorpay Test Mode only. Never use live credentials or real cus
 - [x] Narrow MCP gateway exposing only `create_order`, `create_payment_link`, and `capture_payment`.
 - [x] Fake-upstream integration coverage proving non-`ALLOW` verdicts do not dispatch.
 - [x] Deterministic policy engine with all four verdicts.
-- [ ] Real Razorpay Test Mode webhook.
+- [ ] Real Razorpay Test Mode webhook replay (requested externally; evidence remains visibly pending).
 - [x] Successful credentialed `fetch_all_payments` read evidence with response data omitted.
 - [x] One INR 1 Test Mode order passed through the gateway; each non-`ALLOW` verdict made zero upstream calls.
 - [x] Transactional `RESERVED`, `COMMITTED`, `RELEASED`, and `IN_DOUBT` executor lifecycle.
@@ -30,6 +30,7 @@ The project uses Razorpay Test Mode only. Never use live credentials or real cus
 - [x] Counterfactual Lab replay foundation with bounded schedule exploration and trace minimization.
 - [x] Offline mandate compiler with strict review, explicit approval, immutable versions, and a safe demo agent.
 - [x] Constrained model-backed planner with strict proposals and gateway-only execution.
+- [x] Canonical versioned evidence bundle with provenance, hashes, verification, and scoreboard.
 
 ## Setup
 
@@ -155,6 +156,22 @@ npm run export:ledger
 npm run verify:ledger
 ```
 
+Build, verify, and score a sanitized proof bundle:
+
+```powershell
+npm run evidence -- build --output evidence/bundle
+npm run evidence -- verify evidence/bundle/manifest.json
+npm run evidence -- score evidence/bundle/manifest.json
+```
+
+Use `--created-at <ISO-8601>` when a specific reproducible creation time is required. Without it,
+the builder uses the checked-out commit time, so identical inputs remain byte-identical. The build
+runs the test suite, TypeScript compiler, dependency audit, and diff check; it copies only canonical
+sanitized JSON summaries into the bundle. Every item is labelled as real Test Mode, mocked Gemini,
+deterministic fake, synthetic chaos, local verification, or pending external replay. Missing genuine
+webhook evidence stays `PENDING_EXTERNAL_REPLAY` and cannot be relabelled by the verifier. The
+manifest records whether the commit had uncommitted changes when the bundle was built.
+
 Run a Counterfactual Lab scenario without contacting Razorpay:
 
 ```powershell
@@ -215,6 +232,9 @@ tool fails closed. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the enforcement 
 - Structured generation guides Gemini, but every response remains untrusted and must pass the local
   strict schema. The deterministic fake covers repeatable tests; no live-model reliability claim is
   made by the automated suite.
+- Evidence-bundle hashes detect changes but do not authenticate an author or prove provider origin.
+  The scoreboard reports only repository-derived metrics, and a pending provider replay stays
+  visibly pending rather than being replaced by fixture evidence.
 - The final kill-switch and mandate-version check runs in the transaction that claims a reservation.
   The network call starts immediately after that transaction, so a host failure in that narrow gap
   still requires reconciliation.

@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 
-import { eventIdentity } from "./intake/event.js";
+import { eventIdentity, WebhookEventError } from "./intake/event.js";
+import { hashWebhookIdentifier } from "./intake/privacy.js";
 import { verifyWebhookSignature } from "./intake/signature.js";
 import type { AuditStore } from "./ledger/audit-store.js";
 
@@ -36,8 +37,12 @@ export function createApp(options: AppOptions): Express {
 
       if (!verifyWebhookSignature(rawBody, signature, options.webhookSecrets)) {
         options.auditStore.append("SIGNATURE_REJECTED", {
-          event_id: eventId ?? null,
-          reason: "hmac_mismatch"
+          event_id_hash: hashWebhookIdentifier(eventId),
+          event_category: "unverified",
+          signature_valid: false,
+          http_status: 401,
+          reason: "hmac_mismatch",
+          no_payment_mutation: true
         });
         response.status(401).json({ error: "invalid_signature" });
         return;
@@ -48,26 +53,52 @@ export function createApp(options: AppOptions): Express {
         body = JSON.parse(rawBody.toString("utf8")) as unknown;
       } catch {
         options.auditStore.append("WEBHOOK_REJECTED", {
-          event_id: eventId ?? null,
-          reason: "invalid_json"
+          event_id_hash: hashWebhookIdentifier(eventId),
+          event_category: "unparseable",
+          signature_valid: true,
+          http_status: 400,
+          reason: "invalid_json",
+          no_payment_mutation: true
         });
         response.status(400).json({ error: "invalid_json" });
         return;
       }
 
       if (!eventId) {
-        options.auditStore.append("WEBHOOK_REJECTED", { reason: "event_id_missing" });
+        options.auditStore.append("WEBHOOK_REJECTED", {
+          event_id_hash: null,
+          event_category: "unvalidated",
+          signature_valid: true,
+          http_status: 400,
+          reason: "event_id_missing",
+          no_payment_mutation: true
+        });
         response.status(400).json({ error: "event_id_required" });
         return;
       }
 
-      const identity = eventIdentity(body);
+      let identity;
+      try {
+        identity = eventIdentity(body);
+      } catch (error) {
+        if (!(error instanceof WebhookEventError)) throw error;
+        options.auditStore.append("WEBHOOK_REJECTED", {
+          event_id_hash: hashWebhookIdentifier(eventId),
+          event_category: error.code === "unsupported_event" ? "unsupported" : "invalid",
+          signature_valid: true,
+          http_status: 422,
+          reason: error.code,
+          no_payment_mutation: true
+        });
+        response.status(422).json({ error: error.code });
+        return;
+      }
       const result = options.auditStore.recordWebhook({
         eventId,
         eventType: identity.eventType,
-        ...(identity.paymentId ? { paymentId: identity.paymentId } : {}),
-        ...(identity.operation ? { operation: identity.operation } : {}),
-        ...(identity.stateRank !== undefined ? { stateRank: identity.stateRank } : {})
+        paymentId: identity.paymentId,
+        operation: identity.operation,
+        stateRank: identity.stateRank
       });
 
       response.status(200).json({

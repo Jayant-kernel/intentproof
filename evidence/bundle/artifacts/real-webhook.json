@@ -1,0 +1,1 @@
+{"additional_transaction_authorized":false,"reason":"The original Test Mode delivery was missed while the tunnel was offline; provider replay is pending.","schema_version":1,"status":"PENDING_EXTERNAL_REPLAY"}

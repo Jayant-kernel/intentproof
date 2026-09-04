@@ -18,7 +18,7 @@ describe("webhook intake", () => {
     store.close();
   });
 
-  function payload(event: string, paymentId = "pay_test_001"): string {
+  function payload(event: string, paymentId = "pay_TEST001"): string {
     return JSON.stringify({
       event,
       payload: { payment: { entity: { id: paymentId } } }
@@ -39,6 +39,25 @@ describe("webhook intake", () => {
     expect(response.status).toBe(401);
     expect(store.countByType("SIGNATURE_REJECTED")).toBe(1);
     expect(store.countByType("WEBHOOK_APPLIED")).toBe(0);
+    expect(JSON.stringify(store.list())).not.toContain("evt_bad");
+  });
+
+  it("fails closed on unknown event types after signature verification", async () => {
+    const response = await send("evt_unknown", payload("refund.created"));
+
+    expect(response.status).toBe(422);
+    expect(response.body.error).toBe("unsupported_event");
+    expect(store.countByType("WEBHOOK_REJECTED")).toBe(1);
+    expect(store.countByType("WEBHOOK_APPLIED")).toBe(0);
+  });
+
+  it("fails closed when a supported event lacks a valid payment entity", async () => {
+    const body = JSON.stringify({ event: "payment.captured", payload: {} });
+    const response = await send("evt_invalid_shape", body);
+
+    expect(response.status).toBe(422);
+    expect(response.body.error).toBe("invalid_event_shape");
+    expect(store.countByType("WEBHOOK_REJECTED")).toBe(1);
   });
 
   it("applies a valid delivery once and drops its replay", async () => {
@@ -52,6 +71,27 @@ describe("webhook intake", () => {
     expect(second.body.status).toBe("duplicate_delivery");
     expect(store.countByType("WEBHOOK_APPLIED")).toBe(1);
     expect(store.countByType("DUPLICATE_DROPPED")).toBe(1);
+  });
+
+  it("stores only hashed identifiers and no contact fields in audit evidence", async () => {
+    const eventId = "evt_sensitive_test";
+    const paymentId = "pay_SENSITIVE123";
+    const email = "buyer@example.test";
+    const phone = "+919999999999";
+    const body = JSON.stringify({
+      event: "payment.authorized",
+      payload: { payment: { entity: { id: paymentId, email, contact: phone } } }
+    });
+
+    const response = await send(eventId, body);
+    const audit = JSON.stringify(store.list());
+
+    expect(response.status).toBe(200);
+    expect(audit).not.toContain(eventId);
+    expect(audit).not.toContain(paymentId);
+    expect(audit).not.toContain(email);
+    expect(audit).not.toContain(phone);
+    expect(audit).toMatch(/sha256:[a-f0-9]{64}/u);
   });
 
   it("deduplicates the same capture effect across distinct event types", async () => {

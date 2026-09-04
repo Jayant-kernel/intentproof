@@ -11,6 +11,7 @@ import type {
   ReserveDispatchInput,
   ReserveDispatchResult
 } from "../budget/types.js";
+import { hashWebhookIdentifier } from "../intake/privacy.js";
 import type {
   AuditPayload,
   AuditRow,
@@ -687,14 +688,27 @@ export class AuditStore {
   recordWebhook(input: WebhookRecordInput): WebhookRecordResult {
     const transaction = this.database.transaction((): WebhookRecordResult => {
       const now = new Date().toISOString();
+      const eventIdHash = hashWebhookIdentifier(input.eventId)!;
+      const paymentIdHash = hashWebhookIdentifier(input.paymentId)!;
+      const eventCategory = input.eventType.split(".")[0];
+      const evidence = {
+        event_id_hash: eventIdHash,
+        payment_id_hash: paymentIdHash,
+        event_type: input.eventType,
+        event_category: eventCategory,
+        signature_valid: true,
+        http_status: 200,
+        no_payment_mutation: true
+      };
       const delivery = this.database
         .prepare("INSERT OR IGNORE INTO seen_events (event_id, received_at) VALUES (?, ?)")
-        .run(input.eventId, now);
+        .run(eventIdHash, now);
 
       if (delivery.changes === 0) {
         this.append("DUPLICATE_DROPPED", {
-          event_id: input.eventId,
-          event_type: input.eventType
+          ...evidence,
+          duplicate: true,
+          transition_result: "duplicate_delivery"
         }, now);
         return { status: "duplicate_delivery", auditType: "DUPLICATE_DROPPED" };
       }
@@ -738,14 +752,14 @@ export class AuditStore {
       if (input.paymentId && input.operation) {
         const effect = this.database
           .prepare("INSERT OR IGNORE INTO applied_ops (payment_id, op) VALUES (?, ?)")
-          .run(input.paymentId, input.operation);
+          .run(paymentIdHash, input.operation);
 
         if (effect.changes === 0) {
           this.append("EFFECT_DEDUPED", {
-            event_id: input.eventId,
-            event_type: input.eventType,
-            payment_id: input.paymentId,
-            operation: input.operation
+            ...evidence,
+            operation: input.operation,
+            duplicate: true,
+            transition_result: "duplicate_effect"
           }, now);
           return { status: "duplicate_effect", auditType: "EFFECT_DEDUPED" };
         }
@@ -754,15 +768,15 @@ export class AuditStore {
       if (input.paymentId && input.stateRank !== undefined) {
         const current = this.database
           .prepare("SELECT state_rank FROM payments WHERE payment_id = ?")
-          .get(input.paymentId) as PaymentStateRow | undefined;
+          .get(paymentIdHash) as PaymentStateRow | undefined;
 
         if (current && input.stateRank <= current.state_rank) {
           this.append("OUT_OF_ORDER_IGNORED", {
-            event_id: input.eventId,
-            event_type: input.eventType,
-            payment_id: input.paymentId,
+            ...evidence,
             current_rank: current.state_rank,
-            incoming_rank: input.stateRank
+            incoming_rank: input.stateRank,
+            duplicate: false,
+            transition_result: "out_of_order"
           }, now);
           return { status: "out_of_order", auditType: "OUT_OF_ORDER_IGNORED" };
         }
@@ -772,15 +786,15 @@ export class AuditStore {
             INSERT INTO payments (payment_id, state_rank) VALUES (?, ?)
             ON CONFLICT(payment_id) DO UPDATE SET state_rank = excluded.state_rank
           `)
-          .run(input.paymentId, input.stateRank);
+          .run(paymentIdHash, input.stateRank);
       }
 
       this.append("WEBHOOK_APPLIED", {
-        event_id: input.eventId,
-        event_type: input.eventType,
-        payment_id: input.paymentId ?? null,
+        ...evidence,
         operation: input.operation ?? null,
-        state_rank: input.stateRank ?? null
+        state_rank: input.stateRank ?? null,
+        duplicate: false,
+        transition_result: "applied"
       }, now);
       return { status: "applied", auditType: "WEBHOOK_APPLIED" };
     });

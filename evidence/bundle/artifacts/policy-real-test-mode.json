@@ -1,0 +1,1 @@
+{"allowed_order":{"amount_paise":100,"currency":"INR","policy_verdict":"ALLOW","response_saved":false,"succeeded":true,"tool":"create_order","upstream_tool_calls":1},"credentials_saved":false,"mode":"Razorpay Test Mode","response_saved":false,"schema_version":1}
