@@ -56,6 +56,24 @@ The system has three deliberately separated parts: configuration, live enforceme
 verification. The AI is useful at the edges, while deterministic code owns every decision that can
 affect money.
 
+### Simple six-phase overview
+
+```mermaid
+flowchart LR
+  Rules[1. Merchant sets the rules] --> Request[2. Agent requests a payment action]
+  Request --> Check[3. IntentProof checks the request]
+  Check --> Decision{4. Is the action approved?}
+  Decision -->|Yes| Payment[5. Send it to Razorpay Test Mode]
+  Decision -->|No or unclear| Stop[5. Stop it or ask the merchant]
+  Payment --> Proof[6. Record the result and proof]
+  Stop --> Proof
+```
+
+In short: the merchant defines the limits, the agent suggests an action, and IntentProof decides
+whether it may continue. Every outcome is recorded.
+
+### Detailed system flow
+
 ```mermaid
 flowchart TB
   Merchant[Merchant instruction] --> Redact[Redact sensitive text]
