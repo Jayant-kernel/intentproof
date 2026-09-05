@@ -1,26 +1,43 @@
 # IntentProof
 
-> An AI agent can initiate a payment in seconds. IntentProof makes sure it cannot move beyond what the merchant actually approved.
+> Most payment automation still stops at the final click. IntentProof makes that last step safe enough to automate.
 
 **In one line:** IntentProof is a safety layer between an AI agent and Razorpay that checks every payment action before it is sent.
 
+## Why payments still need so much manual work
+
+Businesses can already automate invoices, reminders, reports, and support. The final payment step,
+however, often returns to a person. Someone must open a dashboard, check the amount and purpose, and
+click **Approve**. This gives the business control, but repeating it for every routine payment takes
+time, adds labour, and prevents the process from running when that person is unavailable.
+
+The obvious alternative is to let an AI agent pay directly. Many teams are not ready to do that.
+Language models can misunderstand a request, hallucinate missing details, follow a malicious prompt,
+or repeat an action after a timeout. When the action moves money, a confident mistake is still a
+real mistake.
+
+The common workarounds leave an important gap:
+
+1. **Ask a human to approve every payment.** This keeps a person in control, but removes most of the
+   speed and availability that an agent is meant to provide.
+2. **Use simple amount or usage limits.** A fixed limit can restrict the size of an action, but it
+   does not understand why the payment is being made, whether delivery was confirmed, or whether
+   this particular action matches the merchant's instruction.
+3. **Put the rules inside the AI prompt.** Prompt instructions are useful guidance, but the same
+   model can misunderstand them or be manipulated by other text. Guidance inside the model should
+   not be the final authority for moving money.
+
+This creates a poor choice: keep every action manual, or give an unpredictable model too much trust.
+IntentProof was built to create a safer middle path.
+
+## How IntentProof closes the gap
+
 A merchant describes the boundaries in plain language: which actions are allowed, how much may be
 spent, when the agent may act, and when a person must approve. IntentProof turns those instructions
-into a reviewed mandate and enforces it with deterministic code. The AI may suggest an action, but
-it never decides whether that action is authorized.
+into a reviewed mandate and enforces it with deterministic code outside the AI model.
 
-The project runs in **Razorpay Test Mode only**. Do not use live credentials, real money, or real
-customer data.
-
-## Why this exists
-
-Payment agents are useful because they can act, not merely answer questions. That ability also
-creates a difficult boundary: a valid API call is not necessarily an approved business decision.
-An agent may retry after a timeout, act on incomplete information, exceed a daily limit, or attempt
-something the merchant never intended.
-
-IntentProof places a merchant-controlled checkpoint in front of the payment provider. Every request
-receives one clear result:
+The separation is simple: **the AI may propose an action, but it never grants permission to execute
+it.** Every request receives one clear result:
 
 - `ALLOW` — the request satisfies the active mandate and may continue.
 - `BLOCK` — the request breaks a known rule and is stopped.
@@ -29,6 +46,13 @@ receives one clear result:
 
 Only `ALLOW` can reach the Razorpay mutation boundary. The other three outcomes make zero upstream
 mutation calls.
+
+Routine actions can therefore continue automatically, while unusual, unsafe, or unclear actions are
+stopped or returned to a person. This preserves human control without requiring a human click for
+every normal request.
+
+The project runs in **Razorpay Test Mode only**. Do not use live credentials, real money, or real
+customer data.
 
 ## What is implemented
 
