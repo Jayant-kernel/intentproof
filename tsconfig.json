@@ -12,7 +12,8 @@
     "rootDir": ".",
     "outDir": "dist",
     "sourceMap": true,
-    "declaration": true
+    "declaration": true,
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx", "web/**/*.ts", "web/**/*.tsx", "vitest.config.ts", "vite.config.ts"]
 }

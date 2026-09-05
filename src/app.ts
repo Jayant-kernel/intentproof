@@ -4,10 +4,13 @@ import { eventIdentity, WebhookEventError } from "./intake/event.js";
 import { hashWebhookIdentifier } from "./intake/privacy.js";
 import { verifyWebhookSignature } from "./intake/signature.js";
 import type { AuditStore } from "./ledger/audit-store.js";
+import { createControlRoomRouter } from "./control-room/routes.js";
+import type { ControlRoomService } from "./control-room/service.js";
 
 export interface AppOptions {
   auditStore: AuditStore;
   webhookSecrets: readonly string[];
+  controlRoom?: ControlRoomService;
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {
@@ -20,6 +23,10 @@ export function createApp(options: AppOptions): Express {
   app.get("/health", (_request, response) => {
     response.json({ ok: true });
   });
+
+  if (options.controlRoom) {
+    app.use("/api/control-room", createControlRoomRouter(options.controlRoom));
+  }
 
   app.post(
     "/webhook",

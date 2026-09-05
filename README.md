@@ -31,6 +31,7 @@ The project uses Razorpay Test Mode only. Never use live credentials or real cus
 - [x] Offline mandate compiler with strict review, explicit approval, immutable versions, and a safe demo agent.
 - [x] Constrained model-backed planner with strict proposals and gateway-only execution.
 - [x] Canonical versioned evidence bundle with provenance, hashes, verification, and scoreboard.
+- [x] Local Control Room with mandate approval, constrained agent runs, audit, Lab replay, and proof views.
 
 ## Setup
 
@@ -42,6 +43,32 @@ npm run build
 ```
 
 Fill `.env` locally. Never commit it.
+
+## Control Room
+
+The Control Room is a React and TypeScript interface over narrowly scoped Express endpoints. The
+browser never receives credentials, raw webhook bodies, database rows, or policy authority. Drafts
+use the deterministic fake compiler, agent proposals use the constrained fake planner, all verdicts
+come from the existing gateway and policy engine, and upstream execution is fake-only.
+
+Keep the webhook listener on its existing port. Run a second local backend instance on a separate
+port, then start Vite on port 4173:
+
+```powershell
+$env:PORT = "8787"
+$env:DB_PATH = ".control-room.db"
+npm start
+```
+
+In another terminal:
+
+```powershell
+npm run dev:frontend
+```
+
+Open `http://127.0.0.1:4173`. The Vite server proxies only `/api` requests to the local Control Room
+backend. The Evidence screen deliberately preserves the genuine webhook as
+`PENDING_EXTERNAL_REPLAY` until real signed evidence exists.
 
 ## Mandate Compiler and Approval
 

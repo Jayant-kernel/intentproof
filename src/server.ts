@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import { createApp } from "./app.js";
+import { ControlRoomService } from "./control-room/service.js";
 import { AuditStore } from "./ledger/audit-store.js";
 
 const webhookSecret = process.env.WEBHOOK_SECRET;
@@ -15,7 +16,8 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 const auditStore = new AuditStore(process.env.DB_PATH ?? "./intentproof.db");
 const secrets = [webhookSecret, process.env.WEBHOOK_SECRET_PREVIOUS ?? ""];
-const app = createApp({ auditStore, webhookSecrets: secrets });
+const controlRoom = new ControlRoomService({ rootDirectory: process.cwd(), auditStore });
+const app = createApp({ auditStore, webhookSecrets: secrets, controlRoom });
 
 const server = app.listen(port, () => {
   process.stderr.write(`IntentProof webhook intake listening on http://localhost:${port}\n`);
