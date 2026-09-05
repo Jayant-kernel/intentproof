@@ -1,39 +1,140 @@
 # IntentProof
 
-AI agents can move money. IntentProof enforces that they move it only as the merchant approved.
+> An AI agent can initiate a payment in seconds. IntentProof makes sure it cannot move beyond what the merchant actually approved.
 
-IntentProof is a merchant-controlled policy gateway for AI payment agents. It combines deterministic
-policy checks, transactional budget reservations, a narrow Razorpay MCP boundary, raw-byte webhook
-verification, and a tamper-evident audit export.
+**In one line:** IntentProof is a safety layer between an AI agent and Razorpay that checks every payment action before it is sent.
 
-The project uses Razorpay Test Mode only. Never use live credentials or real customer data.
+A merchant describes the boundaries in plain language: which actions are allowed, how much may be
+spent, when the agent may act, and when a person must approve. IntentProof turns those instructions
+into a reviewed mandate and enforces it with deterministic code. The AI may suggest an action, but
+it never decides whether that action is authorized.
 
-## Current Status
+The project runs in **Razorpay Test Mode only**. Do not use live credentials, real money, or real
+customer data.
 
-- [x] Frozen Open Track specification.
-- [x] Strict TypeScript repository.
-- [x] Transactional audit records in SQLite.
-- [x] Atomic JSONL export and ledger verification.
-- [x] Raw-body webhook HMAC verification.
-- [x] Correct byte-semantics tests for original, tampered, re-signed, and pretty-printed payloads.
-- [x] Official Razorpay MCP Docker stdio client with Test Mode-only credential guard.
-- [x] Docker transport probe listing 41 tools from the installed official image.
-- [x] Narrow MCP gateway exposing only `create_order`, `create_payment_link`, and `capture_payment`.
-- [x] Fake-upstream integration coverage proving non-`ALLOW` verdicts do not dispatch.
-- [x] Deterministic policy engine with all four verdicts.
-- [ ] Real Razorpay Test Mode webhook replay (requested externally; evidence remains visibly pending).
-- [x] Successful credentialed `fetch_all_payments` read evidence with response data omitted.
-- [x] One INR 1 Test Mode order passed through the gateway; each non-`ALLOW` verdict made zero upstream calls.
-- [x] Transactional `RESERVED`, `COMMITTED`, `RELEASED`, and `IN_DOUBT` executor lifecycle.
-- [x] SQLite-backed idempotency and dispatch-time kill-switch/version checks.
-- [x] Crash recovery and bounded read-only reconciliation for `IN_DOUBT` reservations.
-- [x] Counterfactual Lab replay foundation with bounded schedule exploration and trace minimization.
-- [x] Offline mandate compiler with strict review, explicit approval, immutable versions, and a safe demo agent.
-- [x] Constrained model-backed planner with strict proposals and gateway-only execution.
-- [x] Canonical versioned evidence bundle with provenance, hashes, verification, and scoreboard.
-- [x] Local Control Room with mandate approval, constrained agent runs, audit, Lab replay, and proof views.
+## Why this exists
 
-## Setup
+Payment agents are useful because they can act, not merely answer questions. That ability also
+creates a difficult boundary: a valid API call is not necessarily an approved business decision.
+An agent may retry after a timeout, act on incomplete information, exceed a daily limit, or attempt
+something the merchant never intended.
+
+IntentProof places a merchant-controlled checkpoint in front of the payment provider. Every request
+receives one clear result:
+
+- `ALLOW` — the request satisfies the active mandate and may continue.
+- `BLOCK` — the request breaks a known rule and is stopped.
+- `HOLD_FOR_APPROVAL` — a person must approve before execution.
+- `ABSTAIN` — required evidence is missing or the system cannot decide safely.
+
+Only `ALLOW` can reach the Razorpay mutation boundary. The other three outcomes make zero upstream
+mutation calls.
+
+## What is implemented
+
+- A narrow MCP gateway for `create_order`, `create_payment_link`, and `capture_payment`.
+- Deterministic checks for tool access, amount ceilings, rolling budgets, time windows, delivery
+  evidence, approval thresholds, mandate versions, revocation, and a merchant kill switch.
+- An offline mandate compiler that turns merchant text into a reviewable draft. Only an explicitly
+  approved, hash-valid version can be loaded by the gateway.
+- A constrained Gemini planner that may propose an action but has no provider credentials and no
+  authority to approve it.
+- Transactional budget reservations, stable idempotency keys, and durable request correlation in
+  SQLite.
+- Fail-closed handling of timeouts and uncertain provider results through `IN_DOUBT` state.
+- Startup recovery and bounded, read-only reconciliation for uncertain mutations.
+- Raw-byte Razorpay webhook signature verification, duplicate handling, and transactional updates.
+- A tamper-evident audit ledger and a canonical evidence bundle with hashes and provenance labels.
+- A deterministic Counterfactual Lab that explores retries, crashes, races, delayed webhooks, and
+  ambiguous reads without contacting Razorpay.
+- A local React Control Room for mandate review, safe agent demonstrations, audit inspection, Lab
+  replay, and proof-bundle status.
+
+## Architecture at a glance
+
+The system has three deliberately separated parts: configuration, live enforcement, and offline
+verification. The AI is useful at the edges, while deterministic code owns every decision that can
+affect money.
+
+```mermaid
+flowchart TB
+  Merchant[Merchant instruction] --> Redact[Redact sensitive text]
+  Redact --> Compiler[Gemini or deterministic compiler]
+  Compiler --> Draft[Validated, non-enforceable draft]
+  Draft --> Review[Deterministic review and readable diff]
+  Review --> Approval{Explicit human approval}
+  Approval -->|approved| Mandate[Immutable, hash-valid mandate]
+  Approval -->|not approved| StopDraft[Cannot be loaded]
+
+  Objective[User objective] --> Guard[Input guard and bounded prompt]
+  Guard --> Planner[Gemini or deterministic planner]
+  Planner --> Proposal[Strict action proposal]
+  Proposal --> Gateway[IntentProof MCP gateway]
+  DirectAgent[Agent MCP call] --> Gateway
+  Operator[Local Control Room] --> Api[Narrow Express API]
+  Api --> Gateway
+  Api --> Review
+  Api --> Lab
+  Audit --> Api
+  Bundle --> Api
+  Mandate --> Gateway
+  Context[Budgets, evidence, time, version and kill switch] --> Policy[Deterministic policy engine]
+  Gateway --> Schema[Tool and argument validation]
+  Schema --> Policy
+  Policy --> Verdict{Verdict}
+  Verdict -->|BLOCK / HOLD / ABSTAIN| NoCall[Audit result; no Razorpay mutation]
+  Verdict -->|ALLOW| Reserve[Reserve budget and idempotency key]
+  Reserve --> Recheck[Final version and kill-switch check]
+  Recheck --> Dispatch[Official Razorpay MCP over Docker stdio]
+  Dispatch -->|confirmed| Commit[COMMITTED]
+  Dispatch -->|definitive failure| Release[RELEASED]
+  Dispatch -->|timeout or ambiguity| Doubt[IN_DOUBT; budget remains charged]
+
+  Razorpay[Razorpay Test Mode] --> Webhook[Raw webhook bytes]
+  Webhook --> Signature[HMAC verification before JSON parsing]
+  Signature --> WebhookStore[Deduplicate and record transactionally]
+  WebhookStore --> Context
+  WebhookStore --> Reconcile[Settle matching uncertain capture]
+  Doubt --> Reconcile[Read-only reconciliation]
+  Reconcile -->|unique terminal evidence| Commit
+  Reconcile -->|confirmed failed capture| Release
+  Reconcile -->|still unclear| Escalate[Keep charged, retry later, flag for review]
+
+  Gateway --> Audit[(SQLite audit store)]
+  Reserve --> Audit
+  Commit --> Audit
+  Release --> Audit
+  Doubt --> Audit
+  WebhookStore --> Audit
+  Audit --> Ledger[Canonical JSONL ledger]
+  Audit --> Bundle[Hashed evidence bundle and scoreboard]
+
+  Scenarios[Counterfactual scenarios and campaigns] --> Lab[Deterministic virtual-time lab]
+  Lab --> Regressions[Minimized regression fixtures]
+  Regressions --> Bundle
+```
+
+### The payment path, in simple words
+
+1. An agent asks IntentProof to perform one supported payment action.
+2. IntentProof validates the request and checks it against the approved merchant rules.
+3. A denied, uncertain, or approval-required request stops before Razorpay.
+4. An allowed request reserves its budget before the network call begins.
+5. A confirmed result is committed; a definite failure releases the reservation.
+6. An unclear result remains charged until read-only evidence or a verified webhook resolves it.
+7. Every important decision and state change is written to the audit store.
+
+## Quick start
+
+### Requirements
+
+- Node.js 24 or later
+- npm
+- Docker, when using the official Razorpay MCP server
+- Razorpay Test Mode credentials, only for the optional provider probes
+- A Gemini API key, only for the optional live compiler or planner smoke test
+
+### Install and verify
 
 ```powershell
 npm install
@@ -42,7 +143,8 @@ npm test
 npm run build
 ```
 
-Fill `.env` locally. Never commit it.
+Keep `.env` local and never commit it. The repository rejects a Razorpay key ID unless it begins
+with `rzp_test_`.
 
 ## Control Room
 
@@ -70,9 +172,38 @@ Open `http://127.0.0.1:4173`. The Vite server proxies only `/api` requests to th
 backend. The Evidence screen deliberately preserves the genuine webhook as
 `PENDING_EXTERNAL_REPLAY` until real signed evidence exists.
 
-## Mandate Compiler and Approval
+### See the safe agent flow
 
-Create a draft with the deterministic fake compiler:
+```powershell
+npm run agent
+```
+
+This deterministic demonstration covers allowed, blocked, held, abstained, kill-switch, and stale
+mandate-version cases. It also reports the upstream-call count and relevant audit evidence.
+
+### See model planning without payment access
+
+```powershell
+npm run planner:demo
+```
+
+The planner can return only one of the three supported actions or `no_action`. Its output is treated
+as an untrusted proposal, validated locally, and then passed through the same gateway and policy
+checks as any other agent request.
+
+For an optional Gemini planning-only smoke test:
+
+```powershell
+npm run planner:smoke -- --objective "Place an order for 19900 paise."
+```
+
+Set `LLM_API_KEY` in the process environment first. This command has no gateway, dispatcher, MCP, or
+upstream client dependency, so it cannot contact Razorpay.
+
+## Create and approve a merchant mandate
+
+The compiler is outside the payment path. A draft remains non-enforceable until a named person
+reviews and approves it.
 
 ```powershell
 npm run mandate -- draft --input examples/mandates/shop-owner.txt --provider fake --output mandate-draft.json
@@ -81,102 +212,96 @@ npm run mandate -- approve mandate-draft.json --approved-by demo-merchant --outp
 npm run mandate -- diff mandates/default.yaml mandate-approved.json
 ```
 
-Use `--provider gemini` to call Gemini with `LLM_API_KEY` from the process environment. The compiler
-sends only the redacted merchant instruction. It never receives gateway events, audit rows, payment
-arguments, or Razorpay credentials. Malformed output, timeout, unknown fields, missing source
-coverage, unsupported instructions, ambiguity, and quotes that are not exact source substrings all
-fail closed.
+Use `--provider gemini` with `LLM_API_KEY` to use the live compiler. Only the redacted merchant
+instruction is sent to the model. Payment arguments, audit rows, webhook data, approval state, and
+Razorpay credentials are excluded.
 
-A draft is a separate schema and cannot be loaded by the gateway. `approve` requires a named human
-approver, prints the rule diff first, assigns the proposed version, and creates an approved artifact
-with a deterministic content hash and draft provenance. Approved files use create-once writes, so an
-existing version is never overwritten.
+Generated output must match a strict schema. Unknown fields, unsupported instructions, ambiguous
+sentences, missing source coverage, invented quotes, malformed output, and provider timeouts all
+fail closed. Approval records the reviewer, assigns a version, preserves draft provenance, and
+writes a create-once artifact with a deterministic content hash.
 
-Run the deterministic agent demonstration against the fake upstream:
+## Run the gateway and webhook intake
 
-```powershell
-npm run agent
-```
-
-The transcript shows the agent request, matching mandate quote, deterministic verdict, upstream-call
-count, and audit evidence for allowed, blocked, held, abstained, kill-switch, and stale-version
-cases. The demo agent receives only the IntentProof gateway interface and has no upstream client or
-credentials.
-
-Run the separate model-planner demonstration:
-
-```powershell
-npm run planner:demo
-```
-
-The planner may propose only `create_order`, `create_payment_link`, `capture_payment`, or
-`no_action`. Strict validation rejects malformed JSON, unknown tools or fields, incomplete
-arguments, non-INR currency, invalid paise values, oversized output, sensitive input, and provider
-timeouts before the gateway is called. Valid mutation proposals are validated again against the
-gateway schema. Their intent ID becomes a stable idempotency key, and the existing deterministic
-policy engine remains the only component that can return `ALLOW`, `BLOCK`, `HOLD_FOR_APPROVAL`, or
-`ABSTAIN`.
-
-An optional live Gemini smoke test performs planning only:
-
-```powershell
-npm run planner:smoke -- --objective "Place an order for 19900 paise."
-```
-
-It needs `LLM_API_KEY` in the process environment. The smoke command imports no gateway, MCP,
-dispatcher, or upstream client and therefore cannot reach Razorpay. It prints only the validated
-tool, intent ID, explanation, and validation metadata; mutation arguments are not logged.
-
-Probe the official local Razorpay MCP server and retain only sanitized evidence:
-
-```powershell
-npm run probe:upstream
-```
-
-The probe lists upstream tool names and calls `fetch_all_payments` with `count: 1`. It never
-stores credentials or the read response body. IntentProof rejects any key ID that does not start
-with `rzp_test_`.
-
-Start the narrow MCP gateway over stdio:
+Start the narrow MCP gateway over standard input/output:
 
 ```powershell
 npm run gateway
 ```
 
-The gateway registers exactly the three MVP mutation tools. Calls that return `BLOCK`,
-`HOLD_FOR_APPROVAL`, or `ABSTAIN` are recorded and returned without invoking Razorpay.
-
-The mutating integration probe is intentionally one-shot:
-
-```powershell
-npm run probe:gateway
-```
-
-It creates one INR 1 Test Mode order, then checks the three non-`ALLOW` paths with an upstream-boundary
-counter. It refuses to run again once `evidence/gateway-pass-through.json` exists.
-
-Callers may provide `idempotency_key`. If they do not, IntentProof hashes the mandate, agent, tool,
-canonical arguments, and a five-minute logical window. Reusing a key returns the stored lifecycle
-state and never dispatches again. Each reservation also stores a request fingerprint and a durable
-correlation value: an order receipt, a payment-link reference ID, or the existing payment ID. A key
-cannot be reused with different mutation arguments, and correlation values are locally unique.
-
-If a process stops before a reservation is claimed for dispatch, recovery releases the stale row as
-`never_sent_recovery`. A claimed stale reservation is treated as `IN_DOUBT`, because the call may
-have reached Razorpay. Startup performs recovery, and the maintenance loop repeats it after a short
-staleness window. The reconciler leases uncertain rows and uses only `fetch_all_orders`,
-`fetch_all_payment_links`, or `fetch_payment`. It reads after injected 250 ms, 500 ms, and 1,000 ms
-delays, then keeps the reservation charged, records an escalation, and schedules a later retry when
-the result is still uncertain. Missing entities never release budget. A confirmed `failed` payment
-is the only read result that releases an uncertain capture.
-
-Start the webhook intake after setting `WEBHOOK_SECRET`:
+Start webhook intake after setting `WEBHOOK_SECRET`:
 
 ```powershell
 npm run dev
 ```
 
-Export and verify the audit ledger:
+Available HTTP endpoints:
+
+- `GET /health` — confirms that the webhook service is running.
+- `POST /webhook` — verifies the Razorpay signature from the original request bytes before parsing.
+
+The webhook handler accepts the current secret and an optional previous secret for rotation. Invalid
+signatures, invalid JSON, missing event IDs, unsupported events, and duplicate deliveries are
+recorded without creating a payment mutation.
+
+## Test Mode provider probes
+
+Inspect the official local Razorpay MCP server and save only sanitized evidence:
+
+```powershell
+npm run probe:upstream
+```
+
+The probe lists the available upstream tools and performs a one-item payment read. It does not store
+credentials or the response body.
+
+Run the intentionally one-shot mutation probe:
+
+```powershell
+npm run probe:gateway
+```
+
+It creates one INR 1 Test Mode order and confirms that each non-`ALLOW` verdict produces zero
+upstream calls. It refuses to run again after `evidence/gateway-pass-through.json` exists.
+
+## Recovery and reconciliation
+
+Every allowed mutation receives an idempotency key. A caller may provide a stable business key; if
+it does not, IntentProof derives one from the mandate, agent, tool, canonical arguments, and a
+five-minute time window. Reusing a key returns its stored state instead of dispatching again. Reusing
+the same key for different arguments is blocked.
+
+Before dispatch, IntentProof stores a durable correlation value: an order receipt, a payment-link
+reference ID, or the payment ID used for capture. After a restart:
+
+- A stale reservation that was never claimed for dispatch can be released safely.
+- A stale claimed reservation becomes `IN_DOUBT`, because Razorpay may have received it.
+- The reconciler uses only `fetch_all_orders`, `fetch_all_payment_links`, and `fetch_payment`.
+- Missing, delayed, malformed, or conflicting reads never free the budget.
+- A still-uncertain request remains charged, is scheduled for another check, and is flagged for
+  human review.
+
+## Counterfactual Lab
+
+The Lab reproduces difficult timing and failure cases with a virtual clock and an in-memory fake
+provider. It has no Razorpay transport.
+
+```powershell
+npm run lab -- run scenarios/lab/timeout-after-acceptance.json
+npm run lab -- replay scenarios/lab/webhook-reconciler-race.json --seed 808
+npm run lab -- explore campaigns/lab/unsafe-retry.json
+npm run lab -- reproduce regressions/lab/unsafe-retry-discovery-one_intent_one_effect.json
+```
+
+The checked-in scenarios cover timeout after acceptance, duplicate and out-of-order webhooks,
+retries, crash and restart, revocation during dispatch, malformed reads, and webhook/reconciler
+races. Exploration walks bounded event schedules, checks safety invariants, and minimizes the first
+failure into a reproducible regression fixture. The fixture is run against both an intentionally
+unsafe reference model and the guarded IntentProof model.
+
+## Audit and evidence
+
+Export and verify the tamper-evident ledger:
 
 ```powershell
 npm run export:ledger
@@ -191,77 +316,68 @@ npm run evidence -- verify evidence/bundle/manifest.json
 npm run evidence -- score evidence/bundle/manifest.json
 ```
 
-Use `--created-at <ISO-8601>` when a specific reproducible creation time is required. Without it,
-the builder uses the checked-out commit time, so identical inputs remain byte-identical. The build
-runs the test suite, TypeScript compiler, dependency audit, and diff check; it copies only canonical
-sanitized JSON summaries into the bundle. Every item is labelled as real Test Mode, mocked Gemini,
-deterministic fake, synthetic chaos, local verification, or pending external replay. Missing genuine
-webhook evidence stays `PENDING_EXTERNAL_REPLAY` and cannot be relabelled by the verifier. The
-manifest records whether the commit had uncommitted changes when the bundle was built.
+The bundle contains canonical JSON summaries, SHA-256 hashes, a manifest digest, test and build
+results, ledger verification, and explicit provenance. Evidence is labelled as real Test Mode,
+mocked Gemini, deterministic fake, synthetic chaos, local verification, or pending external replay.
+Synthetic data cannot be presented as genuine Razorpay webhook evidence.
 
-Run a Counterfactual Lab scenario without contacting Razorpay:
+Use `--created-at <ISO-8601>` for a chosen reproducible timestamp. Otherwise the builder uses the
+checked-out commit time so the same inputs produce the same bytes.
 
-```powershell
-npm run lab -- run scenarios/lab/timeout-after-acceptance.json
-npm run lab -- replay scenarios/lab/webhook-reconciler-race.json --seed 808
-npm run lab -- explore campaigns/lab/unsafe-retry.json
-npm run lab -- reproduce regressions/lab/unsafe-retry-discovery-one_intent_one_effect.json
+## Project map
+
+```text
+src/agent/           Safe demo agent and planner-to-gateway composition
+src/budget/          Reservation and dispatch state types
+src/control-room/    Local API and orchestration for the operator interface
+src/executor/        Budgeted, idempotent mutation lifecycle
+src/gateway/         Narrow MCP surface and policy boundary
+src/intake/          Raw webhook verification and privacy helpers
+src/lab/             Deterministic replay, exploration, invariants, and minimization
+src/ledger/          SQLite audit store, canonical export, and verification
+src/llm/             Redaction and mandate compiler providers
+src/mandate/         Draft, review, approval, hashing, and mandate loading
+src/planner/         Strict model proposal layer
+src/policy/          Deterministic policy evaluation
+src/reconciliation/  Read-only resolution of uncertain mutations
+src/upstream/        Official Razorpay MCP client and sanitization
+evidence/            Sanitized checked-in proof artifacts
+scenarios/lab/       Reproducible failure scenarios
+regressions/lab/     Minimized discovered failures
+tests/               Unit and integration coverage
+web/                 React and TypeScript Control Room
 ```
 
-`run` uses the seed stored in a scenario. `replay` requires an explicit seed, so a reported run can
-be repeated without silently using a different schedule. Both commands validate the versioned JSON
-event stream, order equal-time events deterministically, reduce it from a clean virtual clock, and
-print a canonical report. The eight checked-in scenarios cover timeout after acceptance, duplicate
-and out-of-order webhooks, retry, crash and restart, revocation during dispatch, a malformed read,
-and a webhook racing the reconciler.
+For a deeper technical description, see [ARCHITECTURE.md](./ARCHITECTURE.md). For the explicit
+safety boundary, see [SAFETY.md](./SAFETY.md).
 
-`explore` starts from a compact workflow and fault list rather than an authored event order. It
-walks valid equal-time interleavings within explicit event, schedule, depth, and runtime limits,
-prunes equivalent normalized states, and minimizes the first failure for each invariant. The
-checked-in unsafe retry campaign independently finds a one-intent/two-effect failure and writes a
-versioned regression fixture. `reproduce` runs that fixture against both the deliberately unsafe
-reference model and the guarded IntentProof model. Every Lab command uses the in-memory fake
-provider only; none has a Razorpay transport.
+## Current verification status
 
-## Scope
+- The strict TypeScript build, automated test suite, audit export, ledger verification, gateway
+  boundary, executor lifecycle, reconciliation, mandate approval, planner validation, Lab replay,
+  evidence bundle, and local Control Room are implemented.
+- A credentialed `fetch_all_payments` Test Mode read and one INR 1 Test Mode order have sanitized
+  checked-in evidence.
+- A genuine Razorpay Test Mode webhook replay still depends on an external delivery and remains
+  visibly marked `PENDING_EXTERNAL_REPLAY`.
 
-The MVP supports `create_order`, `create_payment_link`, and `capture_payment`. Every other mutating
-tool fails closed. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the enforcement path and
-[SAFETY.md](./SAFETY.md) for its limits.
+## Honest limits
 
-## Open Track Fit
+- IntentProof is a local Test Mode prototype, not a production payment authorization service.
+- The Control Room uses deterministic fake compiler, planner, and upstream components; its browser
+  interface is a local demonstration, not a production operations console.
+- Its SQLite idempotency boundary does not provide a global exactly-once guarantee.
+- Razorpay MCP read responses do not publish a complete output schema, so unfamiliar shapes remain
+  `IN_DOUBT`.
+- Read-after-write timing and payment-link pagination behavior have not been established here.
+- The Counterfactual Lab is bounded model checking, not exhaustive verification or Razorpay API
+  conformance testing.
+- The compiler supports a fixed rule vocabulary; it is not a general natural-language policy
+  language.
+- CLI approval records a local asserted identity. It is not authentication or a digital signature.
+- Evidence hashes reveal changes but do not prove authorship or provider origin.
+- A host failure in the small gap after the final dispatch check and before the network call still
+  requires reconciliation.
 
-- **Real problem:** the public agent surface has no documented merchant-intent layer for contextual ceilings, rolling value limits, evidence-dependent capture, or human approval.
-- **Meaningful AI:** an LLM drafts rules from merchant English and drives the demo agent; deterministic code makes every enforcement decision.
-- **Working product:** the gateway, webhook intake, audit export, and verifier run locally against Razorpay Test Mode.
-- **Evidence of value:** clean-control pass rate, false blocks, simulated value blocked, in-doubt outcomes, duplicate effects prevented, latency, and remaining leaks are measured.
-- **Reliability and depth:** raw-byte signature verification, transactional state, scoped idempotency, fail-closed uncertainty, adversarial fixtures, and tamper localization are tested.
-
-## Where IntentProof Still Leaks
-
-- The pinned MCP image exposes the required receipt, reference-ID, and payment-ID read filters, but
-  it publishes no output schema. IntentProof therefore accepts only the explicit response shapes it
-  validates and leaves every other shape `IN_DOUBT`.
-- Razorpay read-after-write timing and payment-link pagination behavior are not verified. Empty,
-  delayed, contradictory, or ambiguous reads stay charged and require later retry or human review.
-- Idempotency is enforced by this SQLite store. It is not a global exactly-once guarantee.
-- Counterfactual Lab is a deterministic model, not a Razorpay conformance test or a proof of every
-  possible execution. Exploration is bounded, in-memory, and limited to the modeled actions and
-  faults; state pruning relies on the documented normalized projection.
-- The compiler accepts only the frozen rule vocabulary. Its deterministic fake recognizes the demo
-  phrasing, while Gemini output remains untrusted until schema, source-coverage, quote, and human
-  review checks pass. This is not a general natural-language policy language.
-- Human approval is a local CLI identity and immutable file write, not strong user authentication or
-  a digital signature. A compromised host can still replace the mandate supplied at startup.
-- The planner is intentionally narrow and stateless. Sensitive or payment-event-shaped objectives
-  fail closed instead of being sent to Gemini, so trusted payment identifiers must come from a
-  separate deterministic workflow rather than free-form model input.
-- Structured generation guides Gemini, but every response remains untrusted and must pass the local
-  strict schema. The deterministic fake covers repeatable tests; no live-model reliability claim is
-  made by the automated suite.
-- Evidence-bundle hashes detect changes but do not authenticate an author or prove provider origin.
-  The scoreboard reports only repository-derived metrics, and a pending provider replay stays
-  visibly pending rather than being replaced by fixture evidence.
-- The final kill-switch and mandate-version check runs in the transaction that claims a reservation.
-  The network call starts immediately after that transaction, so a host failure in that narrow gap
-  still requires reconciliation.
+These limits are kept visible because safe automation depends as much on stating what is unknown as
+on demonstrating what works.
