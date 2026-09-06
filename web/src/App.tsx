@@ -19,11 +19,14 @@ import {
   KeyRound,
   LockKeyhole,
   Menu,
+  MessageCircle,
+  Bell,
   Play,
   RefreshCw,
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Search,
   ToggleLeft,
   ToggleRight,
   X,
@@ -39,7 +42,7 @@ type Tone = "good" | "bad" | "warn" | "info" | "neutral";
 
 const navGroups: Array<{ label: string; items: Array<{ id: Tab; label: string; icon: LucideIcon }> }> = [
   {
-    label: "Control",
+    label: "Workspace",
     items: [
       { id: "overview", label: "Overview", icon: Gauge },
       { id: "mandate", label: "Mandate", icon: FileCheck2 },
@@ -47,7 +50,7 @@ const navGroups: Array<{ label: string; items: Array<{ id: Tab; label: string; i
     ]
   },
   {
-    label: "Evidence",
+    label: "Investigation",
     items: [
       { id: "audit", label: "Audit", icon: History },
       { id: "lab", label: "Counterfactual Lab", icon: FlaskConical },
@@ -363,10 +366,11 @@ function CommandBar({ overview, latest, onOpenMenu }: { overview: OverviewData; 
     </div>
     <div className="command-status-rail" role="group" aria-label="Current safety status">
       <div className="command-brand"><strong translate="no">IntentProof</strong><span>CONTROL ROOM</span></div>
-      <div className="command-segment"><span>Mandate</span><strong>v{overview.mandate.version}</strong></div>
-      <div className="command-segment"><span>Kill Switch</span><strong className={overview.killSwitch ? "text-bad" : "text-good"}>{overview.killSwitch ? "ENGAGED" : "OFF"}</strong></div>
-      <div className="command-segment pending-segment"><span>External Replay</span><strong>PENDING_EXTERNAL_REPLAY</strong></div>
-      <div className="command-segment"><span>Latest Verdict</span><strong className={`text-${verdictTone(latestVerdict)}`}>{latestLabel}</strong></div>
+      <div className="command-crumb"><span>Control Room</span><ChevronRight size={13} aria-hidden="true" /><strong>Overview</strong></div>
+      <label className="command-search"><Search size={16} aria-hidden="true" /><input aria-label="Search Control Room" placeholder="Search evidence, rules, or actions" /></label>
+      <div className="command-actions"><button className="top-icon" aria-label="Messages"><MessageCircle size={17} aria-hidden="true" /></button><button className="top-icon" aria-label="Notifications"><Bell size={17} aria-hidden="true" /></button><div className="operator"><span className="operator-copy"><small>Operator</small><strong>Demo merchant</strong></span><span className="operator-avatar" aria-hidden="true">DM</span></div></div>
+      <div className="command-segment compact-status"><span>Mandate</span><strong>v{overview.mandate.version}</strong></div>
+      <div className="command-segment compact-status"><span>Latest Verdict</span><strong className={`text-${verdictTone(latestVerdict)}`}>{latestLabel}</strong></div>
     </div>
   </header>;
 }
@@ -394,5 +398,5 @@ export function App() {
   function inspectRule(ruleId: string | null) { if (!ruleId) return; setHighlightedRule(ruleId); navigate("mandate"); }
   if (loading) return <div className="boot" role="status" aria-live="polite"><div className="brand-mark"><ShieldCheck aria-hidden="true" /></div><strong translate="no">IntentProof</strong><span>Verifying local evidence…</span><div className="skeleton-lines" aria-hidden="true"><i /><i /><i /></div></div>;
   if (fatal || !overview || !mandate || !evidence) return <div className="boot error" role="alert"><AlertTriangle aria-hidden="true" /><strong>Control Room Unavailable</strong><span>{fatal || "Required local data is missing."}</span><button className="button primary" onClick={() => location.reload()}>Retry</button></div>;
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to Control Room</a><aside className={menu ? "open" : ""} aria-label="Primary navigation"><div className="brand"><div className="brand-mark"><img src={intentProofBadge} alt="" /></div><div><strong translate="no">IntentProof</strong><span>CONTROL ROOM</span></div><button className="icon-button mobile-close" aria-label="Close navigation" title="Close navigation" onClick={() => setMenu(false)}><X aria-hidden="true" /></button></div><nav>{navGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{group.label}</span>{group.items.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} aria-current={tab === id ? "page" : undefined} className={tab === id ? "active" : ""} onClick={(event) => { if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); navigate(id); }}><Icon size={18} aria-hidden="true" /><span>{label}</span>{tab === id && <ChevronRight size={15} aria-hidden="true" />}</a>)}</div>)}</nav><div className="environment"><span>EXECUTION BOUNDARY</span><div><i aria-hidden="true" />Razorpay Test Mode</div><div><i className="fake" aria-hidden="true" />Deterministic fake</div><div><i className="pending" aria-hidden="true" />Webhook unresolved</div></div><div className="sidebar-foot"><Shield size={15} aria-hidden="true" /><span>No live credentials<br />No real money</span></div></aside>{menu && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMenu(false)} />}<main><CommandBar overview={overview} latest={latest} onOpenMenu={() => setMenu(true)} /><div className="workspace-scroll" id="main-content" tabIndex={-1}>{tab === "overview" && <Overview data={overview} evidence={evidence} audit={audit} onNavigate={navigate} onInspectRule={inspectRule} />}{tab === "mandate" && <Mandate data={mandate} highlightedRule={highlightedRule} onUpdate={(data) => { setMandate(data); void refreshActivity(); }} notify={setToast} />}{tab === "agent" && <Agent overview={overview} onActivity={refreshActivity} onInspectRule={inspectRule} notify={setToast} />}{tab === "audit" && <Audit records={audit} onRefresh={refreshAudit} onInspectRule={inspectRule} />}{tab === "lab" && <Lab scenarios={scenarios} />}{tab === "evidence" && <Evidence data={evidence} />}</div></main>{toast && <div className="toast" role="status" aria-live="polite"><CheckCircle2 size={18} aria-hidden="true" />{toast}</div>}</div>;
+  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to Control Room</a><aside className={menu ? "open" : ""} aria-label="Primary navigation"><div className="brand"><div className="brand-mark"><img src={intentProofBadge} alt="IntentProof mountain badge" /></div><div><strong translate="no">IntentProof</strong><span>CONTROL ROOM</span></div><button className="icon-button mobile-close" aria-label="Close navigation" title="Close navigation" onClick={() => setMenu(false)}><X aria-hidden="true" /></button></div><nav>{navGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{group.label}</span>{group.items.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} aria-current={tab === id ? "page" : undefined} className={tab === id ? "active" : ""} onClick={(event) => { if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); navigate(id); }}><Icon size={18} aria-hidden="true" /><span>{label}</span>{tab === id && <ChevronRight size={15} aria-hidden="true" />}</a>)}</div>)}</nav><div className="environment"><span>LOCAL ENVIRONMENT</span><div><i aria-hidden="true" />Razorpay Test Mode</div><div><i className="fake" aria-hidden="true" />Deterministic fake</div><div><i className="pending" aria-hidden="true" />Webhook unresolved</div></div><button className="sidebar-entry" onClick={() => navigate("overview")}><Shield size={15} aria-hidden="true" /><span>Back to entry</span></button><div className="sidebar-foot"><span>This local demonstration uses test-mode data only.</span></div></aside>{menu && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMenu(false)} />}<main><CommandBar overview={overview} latest={latest} onOpenMenu={() => setMenu(true)} /><div className="workspace-scroll" id="main-content" tabIndex={-1}>{tab === "overview" && <Overview data={overview} evidence={evidence} audit={audit} onNavigate={navigate} onInspectRule={inspectRule} />}{tab === "mandate" && <Mandate data={mandate} highlightedRule={highlightedRule} onUpdate={(data) => { setMandate(data); void refreshActivity(); }} notify={setToast} />}{tab === "agent" && <Agent overview={overview} onActivity={refreshActivity} onInspectRule={inspectRule} notify={setToast} />}{tab === "audit" && <Audit records={audit} onRefresh={refreshAudit} onInspectRule={inspectRule} />}{tab === "lab" && <Lab scenarios={scenarios} />}{tab === "evidence" && <Evidence data={evidence} />}</div></main>{toast && <div className="toast" role="status" aria-live="polite"><CheckCircle2 size={18} aria-hidden="true" />{toast}</div>}</div>;
 }
